@@ -216,6 +216,8 @@ def plt_fig_to_nparray(fig):
     Return:
         np.array with shape = (x,y,d) where d=3
     """
+    # remove white padding
+    fig.tight_layout()
 
     # Draw figure on canvas
     fig.canvas.draw()
