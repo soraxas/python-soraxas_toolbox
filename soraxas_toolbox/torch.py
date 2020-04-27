@@ -39,9 +39,10 @@ class Filename():
 
 
 class TorchCheckpointSaver():
-    def __init__(self, filename, save_as=None, read_only=False):
+    def __init__(self, filename, save_as=None, read_only=False, verbose=1):
         """save_as: you can specific a different name to save to."""
         self.read_only = read_only
+        self.verbose = verbose
         # name for loading
         self.load_fn = Filename(filename)
         # name for saving
@@ -49,6 +50,11 @@ class TorchCheckpointSaver():
             self.save_fn = self.load_fn
         else:
             self.save_fn = Filename(save_as)
+
+    def _print(self, *args, level=1, **kwargs):
+        """Level 0 is debug, 1 is useful info, 2 is error."""
+        if level >= self.verbose:
+            print(*args, **kwargs)
 
     def save(self, state, best=False, timestamp=False, keep_last=5):
         """If timestamp is True, it will only keep the latest `keep_last` files."""
@@ -62,8 +68,9 @@ class TorchCheckpointSaver():
         }, is_best)
         """
         if self.read_only:
-            print(
-                "ERROR: 'TorchCheckpointSaver' refusing to save because you made a promise of this is read only!"
+            self._print(
+                "ERROR: 'TorchCheckpointSaver' refusing to save because you made a promise of this is read only!",
+                level=2
             )
             return
         f = self.save_fn
@@ -80,11 +87,11 @@ class TorchCheckpointSaver():
         dest = os.path.join(f.dir, '{}{}'.format(filename, f.ext))
         os.makedirs(f.dir, exist_ok=True)
         torch.save(state, dest)
-        print("=> Saved checkpoint at '{}'".format(dest))
+        self._print("=> Saved checkpoint at '{}'".format(dest), level=0)
         if best:
             best_name = '{}-(best){}.tar'.format(f.filename, f.ext)
             shutil.copyfile(dest, os.path.join(f.dir, best_name))
-            print("  => copied this (best) result to '{}'".format(best_name))
+            self._print("  => copied this (best) result to '{}'".format(best_name), level=0)
 
     def _get_existing_ckpt(self):
         """Return the list of existing checkpoint files in reverse order (latest first)."""
@@ -97,7 +104,7 @@ class TorchCheckpointSaver():
         all_checkpoints = self._get_existing_ckpt()
         if len(all_checkpoints) > 0:
             filename = all_checkpoints[0]
-            print("=> loading latest checkpoint '{}'".format(filename))
+            self._print("=> loading latest checkpoint '{}'".format(filename), level=1)
             checkpoint = torch.load(filename)
             # args.start_epoch = checkpoint['epoch']
             # best_prec1 = checkpoint['best_prec1']
@@ -107,7 +114,7 @@ class TorchCheckpointSaver():
             #     self.filename, checkpoint['epoch']))
             return checkpoint
         else:
-            print("=> no checkpoint found at '{}'".format(f.full_filename))
+            self._print("=> no checkpoint found at '{}'".format(f.full_filename), level=2)
 
 
 ############################################################
