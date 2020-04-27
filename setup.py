@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="soraxas_toolbox",
-    version="0.0.1",
+    version="0.0.5",
     author="soraxas",
     author_email="oscar@tinyiu.com",
     description="A simple packaged toolbox for various scenario",

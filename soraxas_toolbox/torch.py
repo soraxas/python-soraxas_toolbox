@@ -145,6 +145,39 @@ class TensorboardSummary(object):
 
 
 ############################################################
+##  ~Enhancement towards torch component~  ##
+############################################################
+
+class _RepeatSampler(object):
+    """ Sampler that repeats forever. (So that sampling with thread won't ends)
+    """
+
+    def __init__(self, sampler):
+        self.sampler = sampler
+
+    def __iter__(self):
+        while True:
+            yield from iter(self.sampler)
+
+
+class FastDataLoader(torch.utils.data.dataloader.DataLoader):
+    """From https://github.com/pytorch/pytorch/issues/15849#issuecomment-573921048.
+    This reuse worker process, which is extremely beneficial to short epoch, as it
+    does not need to re-spawn threads from num_workers>0 every epoch."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        object.__setattr__(self, 'batch_sampler', _RepeatSampler(self.batch_sampler))
+        self.iterator = super().__iter__()
+
+    def __len__(self):
+        return len(self.batch_sampler.sampler)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield next(self.iterator)
+
+############################################################
 ##  ~For quick display image~  ##
 ############################################################
 def get_clean_npimg(x, auto_reorder_dim=True):
