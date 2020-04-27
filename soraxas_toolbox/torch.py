@@ -105,9 +105,17 @@ class TorchCheckpointSaver():
 ##  ~For logging to TensorBoard~  ##
 ############################################################
 
+def tensorboard_logdir_new_subdir(directory):
+    """Return a unique new subdir within the given directory."""
+    _id = len(os.listdir(directory))
+    filename = None
+    while filename is None or os.path.exists(filename):
+        _id += 1
+        filename = os.path.join(directory, str(_id))
+    return filename
 
 class TensorboardSummary(object):
-    def __init__(self, directory, id=None):
+    def __init__(self, directory, id=None, auto_increment):
         assert type(directory) == str
         self.directory = directory
         if id is not None:
