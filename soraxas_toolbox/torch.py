@@ -93,15 +93,16 @@ class TorchCheckpointSaver():
             shutil.copyfile(dest, os.path.join(f.dir, best_name))
             self._print("  => copied this (best) result to '{}'".format(best_name), level=0)
 
-    def _get_existing_ckpt(self):
+    def _get_existing_ckpt(self, load=False):
         """Return the list of existing checkpoint files in reverse order (latest first)."""
+        f = self.save_fn if not load else self.load_fn
         all_checkpoints = glob.glob(os.path.join(f.dir, '{}*{}'.format(f.filename, f.ext)))
         return sorted(all_checkpoints, reverse=True)
 
     def load(self):
         f = self.load_fn
         # load checkpoint with latest timestamp
-        all_checkpoints = self._get_existing_ckpt()
+        all_checkpoints = self._get_existing_ckpt(load=True)
         if len(all_checkpoints) > 0:
             filename = all_checkpoints[0]
             self._print("=> loading latest checkpoint '{}'".format(filename), level=1)
@@ -131,7 +132,7 @@ def tensorboard_logdir_new_subdir(directory):
     return filename
 
 class TensorboardSummary(object):
-    def __init__(self, directory, id=None, auto_increment):
+    def __init__(self, directory, id=None):
         assert type(directory) == str
         self.directory = directory
         if id is not None:
