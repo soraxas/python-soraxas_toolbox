@@ -50,7 +50,8 @@ class TorchCheckpointSaver():
         else:
             self.save_fn = Filename(save_as)
 
-    def save(self, state, best=False, timestamp=False):
+    def save(self, state, best=False, timestamp=False, keep_last=5):
+        """If timestamp is True, it will only keep the latest `keep_last` files."""
         """
         save_checkpoint({
             'epoch': epoch + 1,
@@ -69,6 +70,11 @@ class TorchCheckpointSaver():
         if timestamp:
             _stamp = datetime.datetime.now().strftime('%y%m%d_%H%M')
             filename = '{}-{}'.format(f.filename, _stamp)
+            # remove extras
+            all_checkpoints = self._get_existing_ckpt()
+            if len(all_checkpoints) >= keep_last:
+                for _old_ckpt in all_checkpoints[:keep_last - 1]:
+                    os.remove(_old_ckpt)
         else:
             filename = f.filename
         dest = os.path.join(f.dir, '{}{}'.format(filename, f.ext))
@@ -80,12 +86,15 @@ class TorchCheckpointSaver():
             shutil.copyfile(dest, os.path.join(f.dir, best_name))
             print("  => copied this (best) result to '{}'".format(best_name))
 
+    def _get_existing_ckpt(self):
+        """Return the list of existing checkpoint files in reverse order (latest first)."""
+        all_checkpoints = glob.glob(os.path.join(f.dir, '{}*{}'.format(f.filename, f.ext)))
+        return sorted(all_checkpoints, reverse=True)
+
     def load(self):
         f = self.load_fn
         # load checkpoint with latest timestamp
-        all_checkpoints = list(
-            glob.iglob(os.path.join(f.dir, '{}*{}'.format(f.filename, f.ext))))
-        all_checkpoints = sorted(all_checkpoints, reverse=True)
+        all_checkpoints = self._get_existing_ckpt()
         if len(all_checkpoints) > 0:
             filename = all_checkpoints[0]
             print("=> loading latest checkpoint '{}'".format(filename))
