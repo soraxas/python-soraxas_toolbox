@@ -209,6 +209,15 @@ class CachedDataset(object):
             self.__cached_items[index] = self.__dataset[index]
         return self.__cached_items[index]
 
+    def prefetch(self):
+        """This helps to avoid halt lock on multiple process trying to 
+        access the same file when num_workers > 0. This prefetch all data
+        in-advanced. This should be called (if needed) before passing to
+        DataLoader."""
+        import tqdm
+        for item in tqdm.tqdm(self, desc=f'Prefetching {self.__class__.__name__}'):
+            pass
+
 
 ############################################################
 ##  ~For quick display image~  ##
