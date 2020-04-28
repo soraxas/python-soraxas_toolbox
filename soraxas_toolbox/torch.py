@@ -177,6 +177,39 @@ class FastDataLoader(torch.utils.data.dataloader.DataLoader):
         for i in range(len(self)):
             yield next(self.iterator)
 
+
+class CachedDataset(object):
+    """A wrapper around torch.utils.data.dataset.Dataset that cache __getitem__."""
+
+    def __init__(self, dataset, cache_across_multiprocess=True):
+        """This lightweight wrapper enables caching compare to normal torch dataset.
+        If cache_across_multiprocess is set to `True`, it will try to use
+            multiprocessing.Manager's shared dict to share the cache.
+        """
+        if not isinstance(dataset, torch.utils.data.dataset.Dataset):
+            raise ValueError(f"Unknown type {type(dataset)}")
+
+        # mock this as the input dataset
+        self.__class__ = type(dataset.__class__.__name__,
+                              (self.__class__, dataset.__class__),
+                              {})
+        self.__dict__ = dataset.__dict__
+
+        # assign accessible variables for cached items
+        self.__dataset = dataset
+        if cache_across_multiprocess:
+            import multiprocessing
+            cache_manager = multiprocessing.Manager()
+            self.__cached_items = cache_manager.dict()
+        else:
+            self.__cached_items = {}
+
+    def __getitem__(self, index):
+        if index not in self.__cached_items:
+            self.__cached_items[index] = self.__dataset[index]
+        return self.__cached_items[index]
+
+
 ############################################################
 ##  ~For quick display image~  ##
 ############################################################
