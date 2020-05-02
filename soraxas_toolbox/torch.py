@@ -568,7 +568,7 @@ class TorchNetworkPrinter(object):
         return result
 
     def get_tensor_size(self, inx):
-        if type(inx) == tuple:
+        if type(inx) in (tuple, list):
             # recursively call itself
             _shape = ''
             for i in inx:
