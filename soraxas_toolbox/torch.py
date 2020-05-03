@@ -104,7 +104,7 @@ class TorchCheckpointSaver():
         torch.save(state, dest)
         self._print("=> Saved checkpoint at '{}'".format(dest), level=0)
         if best:
-            best_name = '{}-(best){}.tar'.format(filename, f.ext)
+            best_name = '{}-(best){}'.format(filename, f.ext)
             shutil.copyfile(dest, os.path.join(f.dir, best_name))
             self._print("  => copied this (best) result to '{}'".format(best_name), level=0)
 
