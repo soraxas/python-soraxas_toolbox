@@ -56,7 +56,7 @@ class TorchCheckpointSaver():
         if level >= self.verbose:
             print(*args, **kwargs)
 
-    def save(self, state, best=False, timestamp=False, keep_last=5):
+    def save(self, state, best=False, custom_extra_txt="", timestamp=False, keep_last=5):
         """If timestamp is True, it will only keep the latest `keep_last` files."""
         """
         save_checkpoint({
@@ -82,14 +82,29 @@ class TorchCheckpointSaver():
             if len(all_checkpoints) >= keep_last:
                 for _old_ckpt in all_checkpoints[:keep_last - 1]:
                     os.remove(_old_ckpt)
+            dest = os.path.join(f.dir, '{}{}'.format(filename, f.ext))
         else:
-            filename = f.filename
-        dest = os.path.join(f.dir, '{}{}'.format(filename, f.ext))
+            filename = f"{f.filename}{custom_extra_txt}"
+            dest = os.path.join(f.dir, '{}{}'.format(filename, f.ext))
+            if os.path.exists(dest):
+                history_folder = f"{dest}.history"
+                os.makedirs(history_folder, exist_ok=True)
+                historical_weights = sorted(glob.glob(f"{history_folder}/*.tar"))
+                # remove old files
+                while len(historical_weights) >= keep_last:
+                    historical_weights = sorted(glob.glob(f"{history_folder}/*.tar"))
+                    os.remove(historical_weights[0])
+                # get file modified time
+                mtime = os.path.getmtime(dest)
+                _stamp = datetime.datetime.fromtimestamp(mtime).strftime('%y%m%d-%H%M%S')
+                # move to history folder
+                os.rename(dest, f"{history_folder}/{filename}-{_stamp}{f.ext}")
+
         os.makedirs(f.dir, exist_ok=True)
         torch.save(state, dest)
         self._print("=> Saved checkpoint at '{}'".format(dest), level=0)
         if best:
-            best_name = '{}-(best){}.tar'.format(f.filename, f.ext)
+            best_name = '{}-(best){}.tar'.format(filename, f.ext)
             shutil.copyfile(dest, os.path.join(f.dir, best_name))
             self._print("  => copied this (best) result to '{}'".format(best_name), level=0)
 
