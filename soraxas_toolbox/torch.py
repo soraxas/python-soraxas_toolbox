@@ -366,7 +366,8 @@ class TorchNetworkPrinter(object):
                  width_name=25,
                  width_insize=20,
                  width_outsize=20,
-                 ignore_modules=[]):
+                 ignore_modules=[],
+                 ignore_modules_within=[]):
         """You can delay (and manually call patch) by passing initialise as False.
         Give the model as the parameters to denote which model to print. When the
         forward pass of that model is encountered again, it will cleans up and stop printing
@@ -400,6 +401,7 @@ class TorchNetworkPrinter(object):
         self.buffer = []
 
         self.ignore_modules = set(ignore_modules)
+        self.ignore_modules_within = set(ignore_modules_within)
         # we use this to detect finishing printing the entire network
         self.first_module = None
 
@@ -504,8 +506,14 @@ class TorchNetworkPrinter(object):
                 self.print_net_name_insize(
                     module, inx, depth=len(inspect.stack()))
 
+            if module.__class__.__name__ in self.ignore_modules_within:
+                self.off = True
+
         def posthook(module, inx, outx):
             """Hook that is called after the forward pass."""
+            if module.__class__.__name__ in self.ignore_modules_within:
+                self.off = False
+
             if not self.off:
                 self.print_net_outsize(
                     module, outx, depth=len(inspect.stack()))
@@ -561,6 +569,7 @@ class TorchNetworkPrinter(object):
 
     def _print_name(self, name, width_offset=0):
         width = self.width_name + width_offset
+        width = max(0, width)
         self.p("{0:<{name_width}} ".format(name, name_width=width))
 
     def _print_insize(self, insize, width_offset=0):
@@ -590,11 +599,13 @@ class TorchNetworkPrinter(object):
                 _shape = "{},{}".format(_shape, self.get_tensor_size(i))
             # remove first extra comma
             shape = _shape[1:]
-        elif type(inx) == torch.Tensor:
+        elif type(inx) in (torch.Tensor, torch.nn.parameter.Parameter):
             if not inx.shape:
                 shape = 'RealVal'
             else:
                 shape = 'x'.join(str(x) for x in inx.shape)
+        elif type(inx) == bool:
+            shape = 'bool'
         else:
             raise Exception("Unimplemented type {}".format(type(inx)))
         return '{}'.format(shape)
