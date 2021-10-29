@@ -14,7 +14,7 @@ except Exception as e:
     print(e)
 
 
-class Filename():
+class Filename:
     def __init__(self, filename):
         self._dir = os.path.dirname(filename)
         _filename = os.path.splitext(os.path.basename(filename))
@@ -35,10 +35,10 @@ class Filename():
 
     @property
     def full_filename(self):
-        return os.path.join(self.dir, '{}{}'.format(self.filename, self.ext))
+        return os.path.join(self.dir, "{}{}".format(self.filename, self.ext))
 
 
-class TorchCheckpointSaver():
+class TorchCheckpointSaver:
     def __init__(self, filename, save_as=None, read_only=False, verbose=1):
         """save_as: you can specific a different name to save to."""
         self.read_only = read_only
@@ -56,7 +56,9 @@ class TorchCheckpointSaver():
         if level >= self.verbose:
             print(*args, **kwargs)
 
-    def save(self, state, best=False, custom_extra_txt="", timestamp=False, keep_last=5):
+    def save(
+        self, state, best=False, custom_extra_txt="", timestamp=False, keep_last=5
+    ):
         """If timestamp is True, it will only keep the latest `keep_last` files."""
         """
         save_checkpoint({
@@ -70,22 +72,22 @@ class TorchCheckpointSaver():
         if self.read_only:
             self._print(
                 "ERROR: 'TorchCheckpointSaver' refusing to save because you made a promise of this is read only!",
-                level=2
+                level=2,
             )
             return
         f = self.save_fn
         if timestamp:
-            _stamp = datetime.datetime.now().strftime('%y%m%d_%H%M')
-            filename = '{}-{}'.format(f.filename, _stamp)
+            _stamp = datetime.datetime.now().strftime("%y%m%d_%H%M")
+            filename = "{}-{}".format(f.filename, _stamp)
             # remove extras
             all_checkpoints = self._get_existing_ckpt()
             if len(all_checkpoints) >= keep_last:
-                for _old_ckpt in all_checkpoints[:keep_last - 1]:
+                for _old_ckpt in all_checkpoints[: keep_last - 1]:
                     os.remove(_old_ckpt)
-            dest = os.path.join(f.dir, '{}{}'.format(filename, f.ext))
+            dest = os.path.join(f.dir, "{}{}".format(filename, f.ext))
         else:
             filename = f"{f.filename}{custom_extra_txt}"
-            dest = os.path.join(f.dir, '{}{}'.format(filename, f.ext))
+            dest = os.path.join(f.dir, "{}{}".format(filename, f.ext))
             if os.path.exists(dest):
                 history_folder = f"{dest}.history"
                 os.makedirs(history_folder, exist_ok=True)
@@ -96,7 +98,9 @@ class TorchCheckpointSaver():
                     os.remove(historical_weights[0])
                 # get file modified time
                 mtime = os.path.getmtime(dest)
-                _stamp = datetime.datetime.fromtimestamp(mtime).strftime('%y%m%d-%H%M%S')
+                _stamp = datetime.datetime.fromtimestamp(mtime).strftime(
+                    "%y%m%d-%H%M%S"
+                )
                 # move to history folder
                 os.rename(dest, f"{history_folder}/{filename}-{_stamp}{f.ext}")
 
@@ -104,14 +108,18 @@ class TorchCheckpointSaver():
         torch.save(state, dest)
         self._print("=> Saved checkpoint at '{}'".format(dest), level=0)
         if best:
-            best_name = '{}-(best){}'.format(filename, f.ext)
+            best_name = "{}-(best){}".format(filename, f.ext)
             shutil.copyfile(dest, os.path.join(f.dir, best_name))
-            self._print("  => copied this (best) result to '{}'".format(best_name), level=0)
+            self._print(
+                "  => copied this (best) result to '{}'".format(best_name), level=0
+            )
 
     def _get_existing_ckpt(self, load=False):
         """Return the list of existing checkpoint files in reverse order (latest first)."""
         f = self.save_fn if not load else self.load_fn
-        all_checkpoints = glob.glob(os.path.join(f.dir, '{}*{}'.format(f.filename, f.ext)))
+        all_checkpoints = glob.glob(
+            os.path.join(f.dir, "{}*{}".format(f.filename, f.ext))
+        )
         return sorted(all_checkpoints, reverse=True)
 
     def load(self):
@@ -130,12 +138,15 @@ class TorchCheckpointSaver():
             #     self.filename, checkpoint['epoch']))
             return checkpoint
         else:
-            self._print("=> no checkpoint found at '{}'".format(f.full_filename), level=2)
+            self._print(
+                "=> no checkpoint found at '{}'".format(f.full_filename), level=2
+            )
 
 
 ############################################################
 ##  ~For logging to TensorBoard~  ##
 ############################################################
+
 
 def tensorboard_logdir_new_subdir(directory):
     """Return a unique new subdir within the given directory."""
@@ -146,15 +157,17 @@ def tensorboard_logdir_new_subdir(directory):
         filename = os.path.join(directory, str(_id))
     return filename
 
+
 class TensorboardSummary(object):
     def __init__(self, directory, id=None):
         assert type(directory) == str
         self.directory = directory
         if id is not None:
-            self.directory += '_{}'.format(id)
+            self.directory += "_{}".format(id)
 
     def create_summary(self):
         from tensorboardX import SummaryWriter
+
         writer = SummaryWriter(log_dir=self.directory)
         return writer
 
@@ -163,9 +176,9 @@ class TensorboardSummary(object):
 ##  ~Enhancement towards torch component~  ##
 ############################################################
 
+
 class _RepeatSampler(object):
-    """ Sampler that repeats forever. (So that sampling with thread won't ends)
-    """
+    """Sampler that repeats forever. (So that sampling with thread won't ends)"""
 
     def __init__(self, sampler):
         self.sampler = sampler
@@ -182,7 +195,7 @@ class FastDataLoader(torch.utils.data.dataloader.DataLoader):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        object.__setattr__(self, 'batch_sampler', _RepeatSampler(self.batch_sampler))
+        object.__setattr__(self, "batch_sampler", _RepeatSampler(self.batch_sampler))
         self.iterator = super().__iter__()
 
     def __len__(self):
@@ -205,15 +218,16 @@ class CachedDataset(object):
             raise ValueError(f"Unknown type {type(dataset)}")
 
         # mock this as the input dataset
-        self.__class__ = type(dataset.__class__.__name__,
-                              (self.__class__, dataset.__class__),
-                              {})
+        self.__class__ = type(
+            dataset.__class__.__name__, (self.__class__, dataset.__class__), {}
+        )
         self.__dict__ = dataset.__dict__
 
         # assign accessible variables for cached items
         self.__dataset = dataset
         if cache_across_multiprocess:
             import multiprocessing
+
             cache_manager = multiprocessing.Manager()
             self.__cached_items = cache_manager.dict()
         else:
@@ -225,12 +239,13 @@ class CachedDataset(object):
         return self.__cached_items[index]
 
     def prefetch(self):
-        """This helps to avoid halt lock on multiple process trying to 
+        """This helps to avoid halt lock on multiple process trying to
         access the same file when num_workers > 0. This prefetch all data
         in-advanced. This should be called (if needed) before passing to
         DataLoader."""
         import tqdm
-        for item in tqdm.tqdm(self, desc=f'Prefetching {self.__class__.__name__}'):
+
+        for item in tqdm.tqdm(self, desc=f"Prefetching {self.__class__.__name__}"):
             pass
 
 
@@ -247,15 +262,16 @@ def get_clean_npimg(x, auto_reorder_dim=True):
     if x_type == torch.Tensor:
         tensor_x = torch.Tensor.cpu(x).clone().detach()
         if len(tensor_x.shape) < 2 or len(tensor_x.shape) > 4:
-            print("WARN: unsupported Tensor dimension: {}.".format(
-                len(tensor_x.shape)))
+            print("WARN: unsupported Tensor dimension: {}.".format(len(tensor_x.shape)))
             return None
         if len(tensor_x.shape) == 4:
             # we assume the format is in NxCxHxW. We only take the first one.
             if tensor_x.shape[0] > 1:
                 print(
-                    "INFO: Found bathc size > 1 (N={}), only going to take idx 0."
-                    .format(tensor_x.shape[0]))
+                    "INFO: Found bathc size > 1 (N={}), only going to take idx 0.".format(
+                        tensor_x.shape[0]
+                    )
+                )
             tensor_x = tensor_x[0]
         x = tensor_x.numpy()
     ##  ~Should be all in numpy array format now~  ##
@@ -264,25 +280,33 @@ def get_clean_npimg(x, auto_reorder_dim=True):
             # attempt to reorder channel if needed
             # convention is either: (M,N), (M,N,3) or (M,N,4)
             acceptable_channel_num = (3, 4)
-            if (x.shape[2] not in acceptable_channel_num
-                    and x.shape[0] in acceptable_channel_num):
+            if (
+                x.shape[2] not in acceptable_channel_num
+                and x.shape[0] in acceptable_channel_num
+            ):
                 # this is a common case and should be correct most of the time.
-                print("> Possible wrong channel order detected. "
-                      "Attempting to reorder dimension.")
+                print(
+                    "> Possible wrong channel order detected. "
+                    "Attempting to reorder dimension."
+                )
                 x = np.transpose(x, (1, 2, 0))
-            elif (x.shape[2] not in acceptable_channel_num and x_type == torch.Tensor):
+            elif x.shape[2] not in acceptable_channel_num and x_type == torch.Tensor:
                 # this assume the Tensor convension channel ordering.
-                print("> Possible wrong channel order detected. "
-                      "Reordering dimension based on Tensor NCHW convention.")
+                print(
+                    "> Possible wrong channel order detected. "
+                    "Reordering dimension based on Tensor NCHW convention."
+                )
                 x = np.transpose(x, (1, 2, 0))
     return x
+
 
 def show(img, show_info=False, d=None, dimension_order=None, auto_reorder_dim=True):
     """Display image from tensor."""
 
     def out(*argv, **kwargs):
         """Wrapper around print"""
-        if show_info: print(*argv, **kwargs)
+        if show_info:
+            print(*argv, **kwargs)
 
     def _imshow(_img, d):
         """Wrapper to display requested dimension only."""
@@ -291,11 +315,12 @@ def show(img, show_info=False, d=None, dimension_order=None, auto_reorder_dim=Tr
             print("      Defaulting to d=0.")
             d = 0
         if d is None:
-            plt.imshow(_img, interpolation='nearest')
+            plt.imshow(_img, interpolation="nearest")
         else:
-            out('Showing only dimension: {}'.format(d))
-            plt.imshow(_img[:, :, d], interpolation='nearest')
+            out("Showing only dimension: {}".format(d))
+            plt.imshow(_img[:, :, d], interpolation="nearest")
             plt.colorbar()
+
     ###########################################################
     npimg = get_clean_npimg(img, auto_reorder_dim)
     if npimg is None:
@@ -305,12 +330,12 @@ def show(img, show_info=False, d=None, dimension_order=None, auto_reorder_dim=Tr
     try:
         _imshow(npimg, d)
     except TypeError as e:
-        print('========== DEBUG MESSAGE ==========')
+        print("========== DEBUG MESSAGE ==========")
         print("Input type: {}".format(type(img)))
         print("Input shape: {}".format(img.shape))
         print("Input shape after auto_reordering: {}".format(npimg.shape))
         print("Input repr: {}".format(repr(img)))
-        print('===================================')
+        print("===================================")
         raise e
     plt.show()
     out(npimg)
@@ -319,6 +344,7 @@ def show(img, show_info=False, d=None, dimension_order=None, auto_reorder_dim=Tr
 ############################################################
 ##             Turn any matplotlib plt to img             ##
 ############################################################
+
 
 def plt_fig_to_nparray(fig):
     """
@@ -338,7 +364,7 @@ def plt_fig_to_nparray(fig):
     fig.canvas.draw()
 
     # Convert the figure to numpy array, read the pixel values and reshape the array
-    img = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep='')
+    img = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep="")
     img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
 
     # Normalize into 0-1 range for TensorBoard(X). Swap axes for newer versions where API expects colors in first dim
@@ -359,15 +385,17 @@ class TorchNetworkPrinter(object):
     """This class patches nn.Module so it would print the netowrk
     architecture automatically as it performs forward pass."""
 
-    def __init__(self,
-                 initialise=True,
-                 auto_cleanup=True,
-                 use_buffer=False,
-                 width_name=25,
-                 width_insize=20,
-                 width_outsize=20,
-                 ignore_modules=[],
-                 ignore_modules_within=[]):
+    def __init__(
+        self,
+        initialise=True,
+        auto_cleanup=True,
+        use_buffer=False,
+        width_name=25,
+        width_insize=20,
+        width_outsize=20,
+        ignore_modules=[],
+        ignore_modules_within=[],
+    ):
         """You can delay (and manually call patch) by passing initialise as False.
         Give the model as the parameters to denote which model to print. When the
         forward pass of that model is encountered again, it will cleans up and stop printing
@@ -430,8 +458,7 @@ class TorchNetworkPrinter(object):
         """Patch the module __init__."""
         if self._ori_nn_module_init is None:
             self._ori_nn_module_init = torch.nn.Module.__init__
-        torch.nn.Module.__init__ = self.create_wrapper(
-            torch.nn.Module.__init__)
+        torch.nn.Module.__init__ = self.create_wrapper(torch.nn.Module.__init__)
         torch.nn.Module.__patched = self
 
     def unpatch(self):
@@ -443,7 +470,7 @@ class TorchNetworkPrinter(object):
             torch.nn.Module.__init__ = self._ori_nn_module_init
             del torch.nn.Module.__patched
 
-    def print_stack_depth(self, _depth, offset=0, symbol='|'):
+    def print_stack_depth(self, _depth, offset=0, symbol="|"):
         """Return a value that represent how long did we printed the stack depth."""
         if _depth not in self.stack_depth_map:
             # use a list to simplify the stack depth
@@ -452,7 +479,7 @@ class TorchNetworkPrinter(object):
         depth = self.stack_depth_map.index(_depth) + offset
         if depth > 0:
             # if depth is more than one, print any bar before the given symbol
-            _prefix = "{}{} ".format('| ' * (depth - 1), symbol)
+            _prefix = "{}{} ".format("| " * (depth - 1), symbol)
             self.p(_prefix, require_newline=True)
             return len(_prefix)
         else:
@@ -461,7 +488,10 @@ class TorchNetworkPrinter(object):
     def print_net_name_insize(self, module, inx, depth):
         # first time printing
         if not self.banner_printed:
-            print_seq_line = lambda : self.p('-' * (self.width_name + self.width_insize + self.width_outsize), end=True)
+            print_seq_line = lambda: self.p(
+                "-" * (self.width_name + self.width_insize + self.width_outsize),
+                end=True,
+            )
             print_seq_line()
             self._print_name("Network Name")
             self._print_insize("In Size")
@@ -479,18 +509,16 @@ class TorchNetworkPrinter(object):
         #     # we had printed the
         self._check_same_guard(module)
         printed_stack_depth = self.print_stack_depth(depth)
-        self._print_name(
-            module.__class__.__name__, width_offset=-printed_stack_depth)
+        self._print_name(module.__class__.__name__, width_offset=-printed_stack_depth)
         self._print_insize(self.get_tensor_size(inx))
 
     def print_net_outsize(self, module, outx, depth):
         if not self._check_same_guard(module):
             # this is a line with only outsize.
             # print the correct spacing. The 1 offset is to force the arrow line up with previous innser-netowrks
-            printed_stack_depth = self.print_stack_depth(
-                depth, offset=1, symbol='↳')
-            self._print_name('', width_offset=-printed_stack_depth)
-            self._print_insize('')
+            printed_stack_depth = self.print_stack_depth(depth, offset=1, symbol="↳")
+            self._print_name("", width_offset=-printed_stack_depth)
+            self._print_insize("")
         self._print_outsize(self.get_tensor_size(outx))
         self.last_module_printed = hash(module)
 
@@ -503,8 +531,7 @@ class TorchNetworkPrinter(object):
                 self.off = True
 
             if not self.off:
-                self.print_net_name_insize(
-                    module, inx, depth=len(inspect.stack()))
+                self.print_net_name_insize(module, inx, depth=len(inspect.stack()))
 
             if module.__class__.__name__ in self.ignore_modules_within:
                 self.off = True
@@ -515,8 +542,7 @@ class TorchNetworkPrinter(object):
                 self.off = False
 
             if not self.off:
-                self.print_net_outsize(
-                    module, outx, depth=len(inspect.stack()))
+                self.print_net_outsize(module, outx, depth=len(inspect.stack()))
 
             if module.__class__.__name__ in self.ignore_modules:
                 self.off = False
@@ -539,8 +565,7 @@ class TorchNetworkPrinter(object):
             result = func(*args, **kwargs)
             # set up some variable to clean up later
             module = args[0]
-            self.hook_handlers.append(
-                module.register_forward_pre_hook(prehook))
+            self.hook_handlers.append(module.register_forward_pre_hook(prehook))
             self.hook_handlers.append(module.register_forward_hook(posthook))
             return result
 
@@ -554,10 +579,10 @@ class TorchNetworkPrinter(object):
         """Wrapper around print that take notes on using buffer or not."""
         # end the sentence for it if not already
         if require_newline and not self.sentence_ended:
-            text = '\n' + text
+            text = "\n" + text
         kwargs = {}
         if not end:
-            kwargs['end'] = ''
+            kwargs["end"] = ""
             self.sentence_ended = False
         else:
             self.sentence_ended = True
@@ -578,9 +603,7 @@ class TorchNetworkPrinter(object):
 
     def _print_outsize(self, outsize, width_offset=0):
         width = self.width_outsize + width_offset
-        self.p(
-            "{0:<{outsize_width}} ".format(outsize, outsize_width=width),
-            end=True)
+        self.p("{0:<{outsize_width}} ".format(outsize, outsize_width=width), end=True)
 
     def _check_same_guard(self, module):
         """Check if last printed module is the same as this given module."""
@@ -594,18 +617,18 @@ class TorchNetworkPrinter(object):
     def get_tensor_size(self, inx):
         if type(inx) in (tuple, list):
             # recursively call itself
-            _shape = ''
+            _shape = ""
             for i in inx:
                 _shape = "{},{}".format(_shape, self.get_tensor_size(i))
             # remove first extra comma
             shape = _shape[1:]
         elif type(inx) in (torch.Tensor, torch.nn.parameter.Parameter):
             if not inx.shape:
-                shape = 'RealVal'
+                shape = "RealVal"
             else:
-                shape = 'x'.join(str(x) for x in inx.shape)
+                shape = "x".join(str(x) for x in inx.shape)
         elif type(inx) == bool:
-            shape = 'bool'
+            shape = "bool"
         else:
             raise Exception("Unimplemented type {}".format(type(inx)))
-        return '{}'.format(shape)
+        return "{}".format(shape)
