@@ -2,6 +2,7 @@ import abc
 import contextlib
 import datetime
 import os
+from typing import Callable, Union
 
 
 class MagicDict(dict):
@@ -60,8 +61,15 @@ def format_time2readable(elapsed, precision=3, decimal_place=2, width=6):
         return f"{elapsed * factor_and_unit[0]:{_f()}}{factor_and_unit[1]}"
 
 
+def get_current_timestamp(template="%Y-%m-%d_%H-%M") -> str:
+    """Return a string that represent the current timestamp."""
+    return datetime.datetime.now().strftime(template.format(template))
+
+
 def get_non_existing_filename(
-    *filename_parts: str, csv_template: str = "%Y-%m-%d_%H-%M{}.csv"
+    *filename_parts: str,
+    filename_prefix: Union[str, Callable] = get_current_timestamp,
+    filename_suffix: Union[str, Callable] = "",
 ):
     """
     Return a string that represent a path to file that does not exists.
@@ -69,23 +77,22 @@ def get_non_existing_filename(
     If such a filename exists, it will append a suffix after the given name.
 
     Default template: %Y-%m-%d_%H-%M{}.csv
-    E.g.            : 2021-10-29_01-05.csv
+    E.g.            : 2021-10-29_01-05.0.csv
     E.g.            : 2021-10-29_01-05.1.csv
     E.g.            : 2021-10-29_01-05.2.csv
     """
     suffix_num = 0
     while True:
         # join filename parts if they exist
-        _path_parts = list(filename_parts) + [csv_template]
-        target_filename_template = os.path.join(*_path_parts)
-        # apply datetime format
-        fname = datetime.datetime.now().strftime(
-            target_filename_template.format("" if suffix_num == 0 else f".{suffix_num}")
-        )
-        if not os.path.exists(fname):
+        _prefix = filename_prefix() if callable(filename_prefix) else filename_prefix
+        _suffix = filename_suffix() if callable(filename_suffix) else filename_suffix
+        # _path_parts = list(filename_parts) + [f"{_prefix}.{suffix_num}{_suffix}"]
+        # construct format
+        filename = os.path.join(*filename_parts, f"{_prefix}.{suffix_num}{_suffix}")
+        if not os.path.exists(filename):
             break
         suffix_num += 1
-    return fname
+    return filename
 
 
 class ContextManager(metaclass=abc.ABCMeta):
