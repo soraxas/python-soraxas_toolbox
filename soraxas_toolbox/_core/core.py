@@ -2,6 +2,7 @@ import abc
 import contextlib
 import datetime
 import os
+from pathlib import Path
 from typing import Callable, Union
 
 
@@ -67,9 +68,10 @@ def get_current_timestamp(template="%Y-%m-%d_%H-%M") -> str:
 
 
 def get_non_existing_filename(
-    *filename_parts: str,
+    *parent_folders: str,
     filename_prefix: Union[str, Callable] = get_current_timestamp,
     filename_suffix: Union[str, Callable] = "",
+    create_folders: bool = False,
 ):
     """
     Return a string that represent a path to file that does not exists.
@@ -81,14 +83,16 @@ def get_non_existing_filename(
     E.g.            : 2021-10-29_01-05.1.csv
     E.g.            : 2021-10-29_01-05.2.csv
     """
+    if create_folders and len(parent_folders) > 0:
+        Path(os.path.join(*parent_folders)).mkdir(parents=True, exist_ok=True)
     suffix_num = 0
     while True:
         # join filename parts if they exist
         _prefix = filename_prefix() if callable(filename_prefix) else filename_prefix
         _suffix = filename_suffix() if callable(filename_suffix) else filename_suffix
-        # _path_parts = list(filename_parts) + [f"{_prefix}.{suffix_num}{_suffix}"]
+        # _path_parts = list(parent_folders) + [f"{_prefix}.{suffix_num}{_suffix}"]
         # construct format
-        filename = os.path.join(*filename_parts, f"{_prefix}.{suffix_num}{_suffix}")
+        filename = os.path.join(*parent_folders, f"{_prefix}.{suffix_num}{_suffix}")
         if not os.path.exists(filename):
             break
         suffix_num += 1
