@@ -469,6 +469,7 @@ class TorchNetworkPrinter(object):
         else:
             torch.nn.Module.__init__ = self._ori_nn_module_init
             del torch.nn.Module.__patched
+            self._ori_nn_module_init = None
 
     def print_stack_depth(self, _depth, offset=0, symbol="|"):
         """Return a value that represent how long did we printed the stack depth."""
@@ -629,6 +630,8 @@ class TorchNetworkPrinter(object):
                 shape = "x".join(str(x) for x in inx.shape)
         elif type(inx) == bool:
             shape = "bool"
+        elif inx is None:
+            shape = "None"
         else:
             raise Exception("Unimplemented type {}".format(type(inx)))
         return "{}".format(shape)
