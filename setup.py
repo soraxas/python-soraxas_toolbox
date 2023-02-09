@@ -12,7 +12,10 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/soraxas/pytoolbox",
-    packages=setuptools.find_packages(),
+    packages=[
+        "soraxas_toolbox",
+        "soraxas_toolbox._core",
+    ],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
