@@ -20,7 +20,6 @@ class Timer:
         self._last_stamp_time = None
 
     def stamp(self, stamped_str: str):
-
         if self._last_stamp_str is not None:
             key = (self._last_stamp_str, stamped_str)
             if key not in self.all_stamps:

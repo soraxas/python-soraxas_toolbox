@@ -1,11 +1,13 @@
 import os
+import math
+import warnings
 from shutil import which
 from subprocess import Popen, PIPE
 
-from typing import IO, Callable
+from typing import IO, Callable, Optional, Tuple, Union, List
 
 import tqdm
-from PIL.Image import Image
+import PIL.Image
 
 from . import easy_with_blocks, notebook
 
@@ -64,8 +66,44 @@ def module_was_imported(module_name: str):
     return module_name in sys.modules
 
 
-def display(image, pbar: tqdm.tqdm = None, format: str = "bmp") -> None:
-    if isinstance(image, Image):
+def _get_new_shape_maintain_ratio(
+    target_size: Union[Tuple, List, float, int], current_shape: Tuple[int, int]
+):
+    if isinstance(target_size, (tuple, list)):
+        # no need to do anything
+        return target_size
+
+    assert isinstance(target_size, (int, float))
+
+    if current_shape[0] >= current_shape[1]:
+        i1, i2 = 0, 1
+    else:
+        i1, i2 = 1, 0
+    ratio = current_shape[i2] / current_shape[i1]
+    new_shape = [0, 0]
+    new_shape[i1] = int(target_size)
+    new_shape[i2] = int(math.ceil(target_size * ratio))
+    return new_shape
+
+
+def display(
+    image,
+    pbar: tqdm.tqdm = None,
+    format: str = "bmp",
+    normalise: Optional[bool] = None,
+    target_size: Tuple[int, int] = None,
+    is_batched: bool = False,
+) -> None:
+    if module_was_imported("numpy") and module_was_imported("PIL"):
+        import numpy
+
+        if isinstance(image, numpy.ndarray):
+            # convert to pillow image
+            image = PIL.Image.fromarray(image)
+
+    if isinstance(image, PIL.Image.Image):
+        if target_size is not None:
+            image = image.resize(_get_new_shape_maintain_ratio(target_size, image.size))
         return __send_to_display(
             lambda stream: image.save(stream, format=format), pbar=pbar
         )
@@ -74,15 +112,68 @@ def display(image, pbar: tqdm.tqdm = None, format: str = "bmp") -> None:
         import torch
 
         if isinstance(image, torch.Tensor):
-            with easy_with_blocks.NoMissingModuleError(strong_warning=True):
-                import torchvision
+            with torch.no_grad():
+                with easy_with_blocks.NoMissingModuleError(strong_warning=True):
+                    import torchvision
+                    from PIL import Image as PILImage
 
-                return __send_to_display(
-                    lambda stream: torchvision.utils.save_image(
-                        image, stream, format=format
-                    ),
-                    pbar=pbar,
-                )
+                    image = image.to("cpu")
+
+                    if image.dtype == torch.uint8:
+                        image = image.float() / 255
+                        # # directly display it
+                        # return __send_to_display(
+                        #     lambda stream: PILImage.fromarray(
+                        #         image.to("cpu", torch.uint8).numpy()
+                        #     ).save(stream, format=format),
+                        #     pbar=pbar,
+                        # )
+
+                    # for float or double
+                    _min = image.min()
+                    _max = image.max()
+                    _warning_msg = None
+                    if normalise:
+                        image = (image - _min) / (_max - _min)
+                    elif _min < 0 or _max > 1:
+                        if normalise is not False:
+                            _warning_msg = "Given image is of float-type, but its value is not between [0, 1]."
+                            if _min >= 0 and _max <= 255:
+                                _warning_msg = f"{_warning_msg} Seems it's within [0, 255]. Gonna normalising it based on this."
+                            image = image / 255
+
+                    if _warning_msg is not None:
+                        warnings.warn(_warning_msg, RuntimeWarning)
+
+                    if is_batched:
+                        if len(image.shape) == 2:
+                            warnings.warn(
+                                "Input is said to be batched, but it only has 2 dim. Skipping any remaining action as it doesn't make sense.",
+                                RuntimeWarning,
+                            )
+                        elif len(image.shage) == 3:
+                            # is grey scale
+                            image = image.unsqueeze(1)
+                    else:
+                        if len(image.shape) == 2:
+                            # grey scale
+                            image = image.reshape(1, 1, *image.shape)
+                        elif len(image.shape) == 3:
+                            # color non-batch
+                            image = image.unsqueeze(0)
+                    if target_size is not None:
+                        import torch.nn.functional as F
+
+                        image = F.interpolate(
+                            image, size=_get_new_shape_maintain_ratio(target_size)
+                        )
+
+                    return __send_to_display(
+                        lambda stream: torchvision.utils.save_image(
+                            image, stream, format=format
+                        ),
+                        pbar=pbar,
+                    )
 
     if module_was_imported("matplotlib"):
         import matplotlib.figure
