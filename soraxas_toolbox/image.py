@@ -92,7 +92,7 @@ def display(
     format: str = "bmp",
     normalise: Optional[bool] = None,
     target_size: Tuple[int, int] = None,
-    is_batched: bool = False,
+    is_batched: Optional[bool] = None,
 ) -> None:
     if module_was_imported("numpy") and module_was_imported("PIL"):
         import numpy
@@ -145,13 +145,27 @@ def display(
                     if _warning_msg is not None:
                         warnings.warn(_warning_msg, RuntimeWarning)
 
+                    if is_batched is None:
+                        # try to infer it
+                        if len(image.shape) >= 4:
+                            is_batched = True
+                        elif len(image.shape) == 2:
+                            is_batched = False
+                        elif len(image.shape) == 3:
+                            if image.shape[0] in (1, 3):
+                                # probably is gray-scale or RGB image
+                                is_batched = False
+                            else:
+                                # since it has non-standard number of channels, probably its a batched grey-scale image?
+                                is_batched = True
+
                     if is_batched:
                         if len(image.shape) == 2:
                             warnings.warn(
                                 "Input is said to be batched, but it only has 2 dim. Skipping any remaining action as it doesn't make sense.",
                                 RuntimeWarning,
                             )
-                        elif len(image.shage) == 3:
+                        elif len(image.shape) == 3:
                             # is grey scale
                             image = image.unsqueeze(1)
                     else:
@@ -165,7 +179,10 @@ def display(
                         import torch.nn.functional as F
 
                         image = F.interpolate(
-                            image, size=_get_new_shape_maintain_ratio(target_size)
+                            image,
+                            size=_get_new_shape_maintain_ratio(
+                                target_size, image.shape[-2:]
+                            ),
                         )
 
                     return __send_to_display(
