@@ -1,5 +1,9 @@
 from typing import Union, Iterable
-from IPython.display import Markdown, display
+
+from . import easy_with_blocks
+
+with easy_with_blocks.NoMissingModuleError(strong_warning=True):
+    from IPython.display import Markdown, display
 
 
 def is_notebook() -> bool:

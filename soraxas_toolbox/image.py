@@ -5,10 +5,12 @@ import warnings
 from shutil import which
 from subprocess import Popen, PIPE
 
-from typing import IO, Callable, Optional, Tuple, Union, List, Any
+from typing import IO, Callable, Optional, Tuple, Union, List, Any, TYPE_CHECKING
 
-import tqdm
 import PIL.Image
+
+if TYPE_CHECKING:
+    import tqdm
 
 from . import easy_with_blocks, notebook
 
@@ -80,7 +82,7 @@ class TerminalImageViewer:
         return self.program.stdin
 
 
-def __send_to_display(save_to_straem: Callable[[IO], None], pbar: tqdm.tqdm = None):
+def __send_to_display(save_to_straem: Callable[[IO], None], pbar: "tqdm.tqdm" = None):
     if notebook.is_notebook():
         from io import BytesIO
         from IPython.display import Image, display
@@ -216,7 +218,7 @@ class TorchArrayAutoFixer(ArrayAutoFixer):
 
 def display(
     image,
-    pbar: tqdm.tqdm = None,
+    pbar: "tqdm.tqdm" = None,
     format: str = "bmp",
     normalise: Optional[bool] = None,
     target_size: Tuple[int, int] = None,
