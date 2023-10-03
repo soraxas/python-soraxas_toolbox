@@ -136,7 +136,7 @@ def build_combined_bitmask(
     tensor([[1, 3, 9],
             [7, 0, 7]])
     """
-    assert isinstance(mask, torch.LongTensor)
+    assert mask.dtype in (torch.int64,), f"Unsupported dtype: {mask.dtype}"
     assert mask.min() >= 0 and mask.max() < MAX_BITWISE_SHIFT
 
     shifted_bits = torch.bitwise_left_shift(1, mask)
