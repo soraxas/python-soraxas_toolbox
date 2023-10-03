@@ -216,15 +216,97 @@ class TorchArrayAutoFixer(ArrayAutoFixer):
         raise NotImplementedError()
 
 
-def display(
+def __handle_torch_image(image, normalise, is_grayscale, is_batched, target_size):
+    import torch
+
+    image = image.to("cpu")
+
+    if image.dtype == torch.uint8:
+        image = image.float() / 255
+        # # directly display it
+        # return __send_to_display(
+        #     lambda stream: PILImage.fromarray(
+        #         image.to("cpu", torch.uint8).numpy()
+        #     ).save(stream, format=format),
+        #     pbar=pbar,
+        # )
+
+    # for float or double
+    image = TorchArrayAutoFixer.fix_float_range(image, normalise=normalise)
+
+    if is_grayscale:
+        if len(image.shape) > 2:
+            is_batched = True
+            image = image.reshape(-1, image.shape[-2], image.shape[-1])
+
+    # potentially fix color channel index
+    image = TorchArrayAutoFixer.fix_channel(image)
+
+    if is_batched is None:
+        is_batched = TorchArrayAutoFixer.infer_is_batch(image)
+
+    if is_batched:
+        if len(image.shape) == 2:
+            warnings.warn(
+                "Input is said to be batched, but it only has 2 dim. Skipping any remaining action as it doesn't make sense.",
+                RuntimeWarning,
+            )
+        elif len(image.shape) == 3:
+            # is gray scale
+            image = image.unsqueeze(1)
+    else:
+        if len(image.shape) == 2:
+            # grey scale
+            image = image.reshape(1, 1, *image.shape)
+        elif len(image.shape) == 3:
+            # color non-batch
+            image = image.unsqueeze(0)
+    if target_size is not None:
+        import torch.nn.functional as F
+
+        image = F.interpolate(
+            image,
+            size=_get_new_shape_maintain_ratio(target_size, image.shape[-2:]),
+        )
+    return image
+
+
+def concat_images(images: List[PIL.Image.Image], max_cols: int = 0) -> PIL.Image.Image:
+    import PIL.Image
+
+    max_height = max(im.size[0] for im in images)
+    max_width = max(im.size[1] for im in images)
+
+    if max_cols:
+        ncols = min(max_cols, len(images))
+        nrows = int(math.ceil(len(images) / ncols))
+    else:
+        ncols = len(images)
+        nrows = 1
+
+    # Create canvas for the final image with total size
+    shape = (nrows, ncols)
+    image_size = (max_width * shape[1], max_height * shape[0])
+    image = PIL.Image.new("RGB", image_size)
+
+    # Paste images into final image
+    for idx, _im in enumerate(images):
+        col = idx % ncols
+        row = idx // ncols
+        offset = max_width * col, max_height * row
+        idx = row * shape[1] + col
+        image.paste(_im, offset)
+
+    return image
+
+
+def __to_pil_image(
     image,
-    pbar: "tqdm.tqdm" = None,
-    format: str = "bmp",
     normalise: Optional[bool] = None,
     target_size: Tuple[int, int] = None,
     is_batched: Optional[bool] = None,
     is_grayscale: Optional[bool] = None,
-) -> None:
+):
     if module_was_imported("numpy") and module_was_imported("PIL"):
         import numpy
 
@@ -236,15 +318,12 @@ def display(
             # to uint8 if necessary
             image = NumpyArrayAutoFixer.fix_channel(image)
             image = NumpyArrayAutoFixer.fix_dtype(image)
-            # convert to pillow image
-            image = PIL.Image.fromarray(image)
 
-    if isinstance(image, PIL.Image.Image):
-        if target_size is not None:
-            image = image.resize(_get_new_shape_maintain_ratio(target_size, image.size))
-        return __send_to_display(
-            lambda stream: image.save(stream, format=format), pbar=pbar
-        )
+            cur_size = image.shape[:2]
+
+            return PIL.Image.fromarray(image).resize(
+                _get_new_shape_maintain_ratio(target_size, cur_size)
+            )
 
     if module_was_imported("torch"):
         import torch
@@ -255,74 +334,78 @@ def display(
             with torch.no_grad():
                 with easy_with_blocks.NoMissingModuleError(strong_warning=True):
                     import torchvision
-                    from PIL import Image as PILImage
 
-                    image = image.to("cpu")
-
-                    if image.dtype == torch.uint8:
-                        image = image.float() / 255
-                        # # directly display it
-                        # return __send_to_display(
-                        #     lambda stream: PILImage.fromarray(
-                        #         image.to("cpu", torch.uint8).numpy()
-                        #     ).save(stream, format=format),
-                        #     pbar=pbar,
-                        # )
-
-                    # for float or double
-                    image = TorchArrayAutoFixer.fix_float_range(
-                        image, normalise=normalise
-                    )
-
-                    if is_grayscale:
-                        if len(image.shape) > 2:
-                            is_batched = True
-                            image = image.reshape(-1, image.shape[-2], image.shape[-1])
-
-                    # potentially fix color channel index
-                    image = TorchArrayAutoFixer.fix_channel(image)
-
-                    if is_batched is None:
-                        is_batched = TorchArrayAutoFixer.infer_is_batch(image)
-
-                    if is_batched:
-                        if len(image.shape) == 2:
-                            warnings.warn(
-                                "Input is said to be batched, but it only has 2 dim. Skipping any remaining action as it doesn't make sense.",
-                                RuntimeWarning,
+                    # the following should be a list of 3D array
+                    image = (
+                        torchvision.utils.make_grid(
+                            __handle_torch_image(
+                                image=image,
+                                normalise=normalise,
+                                is_grayscale=is_grayscale,
+                                target_size=target_size,
+                                is_batched=is_batched,
                             )
-                        elif len(image.shape) == 3:
-                            # is gray scale
-                            image = image.unsqueeze(1)
-                    else:
-                        if len(image.shape) == 2:
-                            # grey scale
-                            image = image.reshape(1, 1, *image.shape)
-                        elif len(image.shape) == 3:
-                            # color non-batch
-                            image = image.unsqueeze(0)
-                    if target_size is not None:
-                        import torch.nn.functional as F
-
-                        image = F.interpolate(
-                            image,
-                            size=_get_new_shape_maintain_ratio(
-                                target_size, image.shape[-2:]
-                            ),
                         )
-
-                    return __send_to_display(
-                        lambda stream: torchvision.utils.save_image(
-                            image, stream, format=format
-                        ),
-                        pbar=pbar,
+                        .mul(255)
+                        .clamp_(0, 255)
+                        .permute(1, 2, 0)
+                        .to("cpu", torch.uint8)
+                        .numpy()
                     )
+                    # .add_(0.5)
 
+                    return PIL.Image.fromarray(image)
+
+    if isinstance(image, PIL.Image.Image):
+        if target_size is not None:
+            image = image.resize(_get_new_shape_maintain_ratio(target_size, image.size))
+        return image
+
+    raise ValueError(f"Unknown format of type {type(image)} with input {image}")
+
+
+def display(
+    image,
+    *more_images,
+    max_cols: int = None,
+    target_size: Tuple[int, int] = None,
+    pbar: "tqdm.tqdm" = None,
+    format: str = "bmp",
+    #
+    normalise: Optional[bool] = None,
+    is_batched: Optional[bool] = None,
+    is_grayscale: Optional[bool] = None,
+) -> None:
     if module_was_imported("matplotlib"):
         import matplotlib.figure
 
         if isinstance(image, matplotlib.figure.Figure):
+            if len(more_images) > 0:
+                raise NotImplementedError(f"matplotlib does not support multi image")
+
             return __send_to_display(lambda stream: image.savefig(stream), pbar=pbar)
+
+    #####################################################
+    # for list of nparray or tensor
+
+    all_pil_images = [
+        __to_pil_image(
+            im,
+            normalise=normalise,
+            target_size=target_size,
+            is_batched=is_batched,
+            is_grayscale=is_grayscale,
+        )
+        for im in (image, *more_images)
+    ]
+    image = concat_images(
+        all_pil_images,
+        max_cols=max_cols,
+    )
+
+    return __send_to_display(
+        lambda stream: image.save(stream, format=format), pbar=pbar
+    )
 
     raise ValueError(f"Unknown format of type {type(image)} with input {image}")
 
