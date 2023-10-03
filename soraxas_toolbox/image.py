@@ -271,12 +271,27 @@ def __handle_torch_image(image, normalise, is_grayscale, is_batched, target_size
     return image
 
 
-def concat_images(images: List[PIL.Image.Image], max_cols: int = 0) -> PIL.Image.Image:
+def cumulative_sum_starts_at(my_list):
+    """
+    Given [7, 5, 2, 9]
+    retruns [0, 7, 12, 14]
+    """
+    result = [0 for _ in range(len(my_list))]
+    for i in range(len(my_list) - 1):
+        result[i + 1] = result[i] + my_list[i]
+    return result
+
+
+def concat_images(
+    images: List[PIL.Image.Image], max_cols: int = 0, boarder: int = 5
+) -> PIL.Image.Image:
+    # no need to concat
+    if len(images) <= 1:
+        return images[0]
+
     import PIL.Image
 
-    max_height = max(im.size[0] for im in images)
-    max_width = max(im.size[1] for im in images)
-
+    # compute grid size
     if max_cols:
         ncols = min(max_cols, len(images))
         nrows = int(math.ceil(len(images) / ncols))
@@ -284,17 +299,33 @@ def concat_images(images: List[PIL.Image.Image], max_cols: int = 0) -> PIL.Image
         ncols = len(images)
         nrows = 1
 
+    # partition into per rows and per cols max values
+    max_height_per_row = [[] for _ in range(nrows)]
+    max_width_per_col = [[] for _ in range(ncols)]
+    for idx, _im in enumerate(images):
+        col = idx % ncols
+        row = idx // ncols
+        max_height_per_row[row].append(_im.height + boarder)
+        max_width_per_col[col].append(_im.width + boarder)
+    max_height_per_row = [max(it) for it in max_height_per_row]
+    max_width_per_col = [max(it) for it in max_width_per_col]
+    ########################################
+    # remove the board for the last row & col
+    max_height_per_row[-1] -= boarder
+    max_width_per_col[-1] -= boarder
+
     # Create canvas for the final image with total size
-    shape = (nrows, ncols)
-    image_size = (max_width * shape[1], max_height * shape[0])
+    image_size = (sum(max_width_per_col), sum(max_height_per_row))
     image = PIL.Image.new("RGB", image_size)
 
+    # compute where the starting location for each images
+    _width_starts_at = cumulative_sum_starts_at(max_width_per_col)
+    _height_starts_at = cumulative_sum_starts_at(max_height_per_row)
     # Paste images into final image
     for idx, _im in enumerate(images):
         col = idx % ncols
         row = idx // ncols
-        offset = max_width * col, max_height * row
-        idx = row * shape[1] + col
+        offset = _width_starts_at[col], _height_starts_at[row]
         image.paste(_im, offset)
 
     return image
@@ -319,11 +350,9 @@ def __to_pil_image(
             image = NumpyArrayAutoFixer.fix_channel(image)
             image = NumpyArrayAutoFixer.fix_dtype(image)
 
-            cur_size = image.shape[:2]
+            image = PIL.Image.fromarray(image)
 
-            return PIL.Image.fromarray(image).resize(
-                _get_new_shape_maintain_ratio(target_size, cur_size)
-            )
+            return image.resize(_get_new_shape_maintain_ratio(target_size, image.size))
 
     if module_was_imported("torch"):
         import torch
