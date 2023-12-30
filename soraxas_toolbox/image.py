@@ -14,9 +14,6 @@ if TYPE_CHECKING:
 
 from . import easy_with_blocks, notebook
 
-if not which("timg"):
-    raise ValueError("timg not installed")
-
 
 ############################################################
 ##             Turn any matplotlib plt to img             ##
@@ -82,7 +79,11 @@ class TerminalImageViewer:
         return self.program.stdin
 
 
-def __send_to_display(save_to_straem: Callable[[IO], None], pbar: "tqdm.tqdm" = None):
+def __send_to_display(
+    save_to_straem: Callable[[IO], None],
+    pbar: "tqdm.tqdm" = None,
+    pil_image: PIL.Image = None,
+):
     if notebook.is_notebook():
         from io import BytesIO
         from IPython.display import Image, display
@@ -93,11 +94,20 @@ def __send_to_display(save_to_straem: Callable[[IO], None], pbar: "tqdm.tqdm" = 
 
             display(Image(stream.read()))
     else:
-        with TerminalImageViewer(get_stdout=pbar is not None) as viewer:
-            save_to_straem(viewer.stream)
-            if pbar is not None:
-                out, err = viewer.program.communicate()
-                pbar.write(out.decode())
+        if which("timg"):
+            with TerminalImageViewer(get_stdout=pbar is not None) as viewer:
+                save_to_straem(viewer.stream)
+                if pbar is not None:
+                    out, err = viewer.program.communicate()
+                    pbar.write(out.decode())
+        else:
+            from io import BytesIO
+            from term_image.image import AutoImage
+
+            with BytesIO() as stream:
+                save_to_straem(stream)
+                stream.seek(0)
+                AutoImage(pil_image).draw()
 
 
 def module_was_imported(module_name: str):
@@ -437,7 +447,7 @@ def display(
     )
 
     return __send_to_display(
-        lambda stream: image.save(stream, format=format), pbar=pbar
+        lambda stream: image.save(stream, format=format), pbar=pbar, pil_image=image
     )
 
     raise ValueError(f"Unknown format of type {type(image)} with input {image}")
