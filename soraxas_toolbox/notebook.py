@@ -2,7 +2,7 @@ from typing import Union, Iterable
 
 from . import easy_with_blocks
 
-with easy_with_blocks.NoMissingModuleError(strong_warning=True):
+with easy_with_blocks.NoMissingModuleError(strong_warning=False):
     from IPython.display import Markdown, display
 
 

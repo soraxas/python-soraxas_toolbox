@@ -102,6 +102,9 @@ def __send_to_display(
                     pbar.write(out.decode())
         else:
             from io import BytesIO
+            import pip_ensure_version
+
+            pip_ensure_version.require_package("term_image")
             from term_image.image import AutoImage
 
             with BytesIO() as stream:
