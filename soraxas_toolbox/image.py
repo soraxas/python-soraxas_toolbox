@@ -1,16 +1,20 @@
+from locale import normalize
 import os
 import sys
 import math
 import warnings
 from shutil import which
 from subprocess import Popen, PIPE
+from abc import ABC
 
 from typing import IO, Callable, Optional, Tuple, Union, List, Any, TYPE_CHECKING
 
 import PIL.Image
+import numpy as np
 
 if TYPE_CHECKING:
     import tqdm
+    import torch
 
 from . import easy_with_blocks, notebook
 
@@ -79,38 +83,86 @@ class TerminalImageViewer:
         return self.program.stdin
 
 
+from typing import Literal
+
+
+class DisplayableImage:
+    """
+    A wrapper that can hold either a PIL image or a stream save functor.
+    """
+
+    mode: Literal["pil", "stream"]
+    __tmp_file_buffer: Optional["BytesIO"] = None
+
+    def __init__(
+        self,
+        pil_image: PIL.Image.Image = None,
+        stream_save_functor: Callable[[IO], None] = None,
+    ):
+        if pil_image is not None and stream_save_functor is None:
+            self.mode = "pil"
+        elif stream_save_functor is not None and pil_image is None:
+            self.mode = "stream"
+        else:
+            raise ValueError(
+                "Either pil_image or stream must be provided, but not both."
+            )
+        self.__pil_image = pil_image
+        self.__stream_save_functor = stream_save_functor
+
+    def into_stream_save_functor(self, format: str = "bmp") -> Callable[[IO], None]:
+        """
+        Turn the image into stream if it is not already.
+        """
+        if self.mode == "pil":
+            self.__pil_image.save(self.stream, format=format)
+            self.stream.seek(0)
+            self.mode = "stream"
+            self.__pil_image = None
+        elif self.mode == "stream":
+            return self.__stream_save_functor
+        raise ValueError(f"Unknown mode {self.mode}")
+
+    def into_pil(self):
+        """
+        Turn the image into PIL if it is not already.
+        """
+        if self.mode == "stream":
+            from io import BytesIO
+
+            # create this tmp buffer on SELF to keep the file in memory
+            self.__tmp_file_buffer = BytesIO()
+            self.into_stream_save_functor()(self.__tmp_file_buffer)
+            return PIL.Image.open(self.__tmp_file_buffer)
+
+        elif self.mode == "pil":
+            return self.__pil_image
+        raise ValueError(f"Unknown mode {self.mode}")
+
+
 def __send_to_display(
-    save_to_straem: Callable[[IO], None],
+    displayable_image: DisplayableImage,
     pbar: "tqdm.tqdm" = None,
-    pil_image: PIL.Image = None,
 ):
     if notebook.is_notebook():
         from io import BytesIO
         from IPython.display import Image, display
 
-        with BytesIO() as stream:
-            save_to_straem(stream)
-            stream.seek(0)
-
-            display(Image(stream.read()))
+        display(displayable_image.into_pil())
     else:
         if which("timg"):
             with TerminalImageViewer(get_stdout=pbar is not None) as viewer:
-                save_to_straem(viewer.stream)
+                displayable_image.into_stream_save_functor()(viewer.stream)
                 if pbar is not None:
                     out, err = viewer.program.communicate()
                     pbar.write(out.decode())
         else:
-            from io import BytesIO
             import pip_ensure_version
 
             pip_ensure_version.require_package("term_image")
             from term_image.image import AutoImage
 
-            with BytesIO() as stream:
-                save_to_straem(stream)
-                stream.seek(0)
-                AutoImage(pil_image).draw()
+            AutoImage(displayable_image.into_pil()).draw()
 
 
 def module_was_imported(module_name: str):
@@ -137,7 +189,41 @@ def _get_new_shape_maintain_ratio(
     return new_shape
 
 
-from abc import ABC
+def normalize_image(image: np.ndarray):
+    _min = image.min()
+    _max = image.max()
+    return (image - _min) / (_max - _min)
+
+
+def ensure_uint8_image(image: np.ndarray, as_uint16: bool = False):
+    _min = image.min()
+    _max = image.max()
+
+    _is_float = image.dtype in (np.float32, np.float64)
+    if image.dtype == np.uint8:
+        # no op
+        pass
+    elif as_uint16 and _is_float:
+        if _min < 0 or _max > 2**16 - 1:
+            warnings.warn(
+                f"Given image is of float-type, but its value is not between [0, 2^16 - 1]. (min: {_min}, max: {_max}). ",
+                RuntimeWarning,
+            )
+        # first cast it back to uint16
+        image = image.astype(np.uint16)
+    elif _is_float:
+        if _min < 0 or _max > 1:
+            warnings.warn(
+                f"Given image is of float-type, but its value is not between [0, 1]. (min: {_min}, max: {_max}). "
+                "You might want to normalise it first, or treat it as uint16 image.",
+                RuntimeWarning,
+            )
+        image = (image * 255).astype(np.uint8)
+    elif image.dtype == np.uint16:
+        image = (image / 256).astype(np.uint8)
+    else:
+        raise NotImplementedError(f"Given image is of unknown dtype {image.dtype}")
+    return image
 
 
 class ArrayAutoFixer(ABC):
@@ -185,15 +271,14 @@ class ArrayAutoFixer(ABC):
         _max = image.max()
         _warning_msg = None
         if normalise:
-            image = (image - _min) / (_max - _min)
+            image = normalize_image(image)
         elif _min < 0 or _max > 1:
-            if normalise is not False:
-                _warning_msg = (
-                    "Given image is of float-type, but its value is not between [0, 1]."
-                )
-                if _min >= 0 and _max <= 255:
-                    _warning_msg = f"{_warning_msg} Seems it's within [0, 255]. Gonna normalising it based on this."
-                image = image / 255
+            _warning_msg = (
+                "Given image is of float-type, but its value is not between [0, 1]."
+            )
+            if _min >= 0 and _max <= 255:
+                _warning_msg = f"{_warning_msg} Seems it's within [0, 255]. Gonna normalising it based on this."
+            image = image / 255
 
         if _warning_msg is not None:
             warnings.warn(_warning_msg, RuntimeWarning)
@@ -359,6 +444,13 @@ def __to_pil_image(
             if image.dtype in NumpyArrayAutoFixer.float_types():
                 # scale if necessary
                 image = NumpyArrayAutoFixer.fix_float_range(image, normalise=normalise)
+            else:
+                if normalize:
+                    # we still need to normalize if its not float
+                    ori_dtype = image.dtype
+                    image = image.astype(numpy.float32)
+                    image = (image - image.min()) / (image.max() - image.min())
+                    image = image.astype(ori_dtype)
             # to uint8 if necessary
             image = NumpyArrayAutoFixer.fix_channel(image)
             image = NumpyArrayAutoFixer.fix_dtype(image)
@@ -411,7 +503,7 @@ def __to_pil_image(
 
 
 def display(
-    image,
+    image: Union[np.ndarray, PIL.Image.Image, "torch.Tensor"],
     *more_images,
     max_cols: int = None,
     target_size: Tuple[int, int] = None,
@@ -422,14 +514,29 @@ def display(
     is_batched: Optional[bool] = None,
     is_grayscale: Optional[bool] = None,
 ) -> None:
+    # if we are normalising, we need to convert the image to float32
+    if normalise:
+        if module_was_imported("torch"):
+            import torch
+
+            if isinstance(image, torch.Tensor):
+                image = image.cpu().numpy()
+        if isinstance(image, np.ndarray):
+            image = image.astype(np.float32)
+
     if module_was_imported("matplotlib"):
         import matplotlib.figure
 
         if isinstance(image, matplotlib.figure.Figure):
             if len(more_images) > 0:
-                raise NotImplementedError(f"matplotlib does not support multi image")
+                raise NotImplementedError("matplotlib does not support multi image")
 
-            return __send_to_display(lambda stream: image.savefig(stream), pbar=pbar)
+            return __send_to_display(
+                displayable_image=DisplayableImage(
+                    stream_save_functor=lambda stream: image.savefig(stream),
+                ),
+                pbar=pbar,
+            )
 
     #####################################################
     # for list of nparray or tensor
@@ -449,8 +556,15 @@ def display(
         max_cols=max_cols,
     )
 
+    # if image is in 16bit, convert it to 8bit
+    if image.mode == "I;16":
+        image = image.convert("L")
+
     return __send_to_display(
-        lambda stream: image.save(stream, format=format), pbar=pbar, pil_image=image
+        displayable_image=DisplayableImage(
+            stream_save_functor=lambda stream: image.save(stream, format=format),
+        ),
+        pbar=pbar,
     )
 
     raise ValueError(f"Unknown format of type {type(image)} with input {image}")

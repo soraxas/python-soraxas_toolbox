@@ -1,14 +1,10 @@
 try:
     import datetime
     import glob
-    import inspect
     import os
     import shutil
 
-    import matplotlib.pyplot as plt
-    import numpy as np
     import torch
-    from tensorboardX import SummaryWriter
 except Exception as e:
     print("Error occured when importing dependencies:")
     print(e)
@@ -160,7 +156,7 @@ def tensorboard_logdir_new_subdir(directory):
 
 class TensorboardSummary(object):
     def __init__(self, directory, id=None):
-        assert type(directory) == str
+        assert type(directory) is str
         self.directory = directory
         if id is not None:
             self.directory += "_{}".format(id)

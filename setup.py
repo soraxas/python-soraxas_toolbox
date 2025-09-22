@@ -13,10 +13,22 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/soraxas/pytoolbox",
     packages=setuptools.find_packages(),
-    install_requires=['pip-ensure-version>=1.0.1'],
+    install_requires=["pip-ensure-version>=1.0.1"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    entry_points={
+        "console_scripts": [
+            "st=soraxas_toolbox.cli:main",
+        ],
+    },
+    extras_require={
+        "cli": [
+            "typer>=0.9.0",
+            "matplotlib",
+            "term-image",
+        ],
+    },
 )

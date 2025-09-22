@@ -1,14 +1,7 @@
 try:
-    import datetime
-    import glob
     import inspect
-    import os
-    import shutil
 
-    import matplotlib.pyplot as plt
-    import numpy as np
     import torch
-    from tensorboardX import SummaryWriter
 except Exception as e:
     print("Error occured when importing dependencies:")
     print(e)
@@ -266,7 +259,7 @@ class TorchNetworkPrinter(object):
                 shape = "RealVal"
             else:
                 shape = "x".join(str(x) for x in inx.shape)
-        elif type(inx) == bool:
+        elif type(inx) is bool:
             shape = "bool"
         elif inx is None:
             shape = "None"

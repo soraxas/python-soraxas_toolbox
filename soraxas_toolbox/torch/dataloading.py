@@ -1,14 +1,5 @@
 try:
-    import datetime
-    import glob
-    import inspect
-    import os
-    import shutil
-
-    import matplotlib.pyplot as plt
-    import numpy as np
     import torch
-    from tensorboardX import SummaryWriter
 except Exception as e:
     print("Error occured when importing dependencies:")
     print(e)

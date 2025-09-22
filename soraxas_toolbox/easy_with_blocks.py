@@ -1,7 +1,7 @@
 import contextlib
 import warnings
 
-from . import ContextManager
+from .core import ContextManager
 
 
 class NoMissingModuleError(ContextManager):

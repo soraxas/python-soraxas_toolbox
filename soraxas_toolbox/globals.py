@@ -1,4 +1,3 @@
-from types import SimpleNamespace
 from typing import Callable
 
 ns = dict()
