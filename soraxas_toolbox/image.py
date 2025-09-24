@@ -6,6 +6,7 @@ import warnings
 from shutil import which
 from subprocess import Popen, PIPE
 from abc import ABC
+from dataclasses import dataclass
 
 from typing import IO, Callable, Optional, Tuple, Union, List, Any, TYPE_CHECKING
 
@@ -22,6 +23,10 @@ from . import easy_with_blocks, notebook
 ############################################################
 ##             Turn any matplotlib plt to img             ##
 ############################################################
+
+
+def read_as_array(path: str):
+    return np.array(PIL.Image.open(path))
 
 
 def plt_fig_to_nparray(fig):
@@ -45,8 +50,16 @@ def plt_fig_to_nparray(fig):
     fig.canvas.draw()
 
     # Convert the figure to numpy array, read the pixel values and reshape the array
-    img = np.fromstring(fig.canvas.tostring_rgb(), dtype=np.uint8, sep="")
-    img = img.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+    if hasattr(fig.canvas, "tostring_rgb"):
+        _img_str = fig.canvas.tostring_rgb()
+        n_channel = 3
+    elif hasattr(fig.canvas, "tostring_argb"):
+        _img_str = fig.canvas.tostring_argb()
+        n_channel = 4
+    else:
+        raise NotImplementedError(f"{fig.canvas}")
+    img = np.fromstring(_img_str, dtype=np.uint8, sep="")
+    img = img.reshape(fig.canvas.get_width_height()[::-1] + (n_channel,))
 
     # Normalize into 0-1 range for TensorBoard(X). Swap axes for newer versions where API expects colors in first dim
     img = img / 255.0
@@ -64,11 +77,19 @@ class TerminalImageViewer:
             cmd.append(
                 f"-g{os.getenv('TERMINAL_WIDTH')}x{os.getenv('TERMINAL_HEIGHT')}"
             )
+
+        # the following messes the linking path if this python is running inside
+        # a contained environment (e.g. pixi), while timg is in another contained
+        # environment (e.g. in junest)
+        clean_env = os.environ.copy()
+        clean_env.pop("LD_LIBRARY_PATH", None)
+
         self.program = Popen(
             cmd,
             stdin=PIPE,
             stdout=PIPE if get_stdout else None,
             bufsize=-1,
+            env=clean_env,
         )
 
     def __enter__(self):
@@ -98,6 +119,7 @@ class DisplayableImage:
         self,
         pil_image: PIL.Image.Image = None,
         stream_save_functor: Callable[[IO], None] = None,
+        stream_format: str = "bmp",
     ):
         if pil_image is not None and stream_save_functor is None:
             self.mode = "pil"
@@ -109,16 +131,16 @@ class DisplayableImage:
             )
         self.__pil_image = pil_image
         self.__stream_save_functor = stream_save_functor
+        self.__stream_format = stream_format
 
-    def into_stream_save_functor(self, format: str = "bmp") -> Callable[[IO], None]:
+    def into_stream_save_functor(self) -> Callable[[IO], None]:
         """
         Turn the image into stream if it is not already.
         """
         if self.mode == "pil":
-            self.__pil_image.save(self.stream, format=format)
-            self.stream.seek(0)
-            self.mode = "stream"
-            self.__pil_image = None
+            return lambda stream: self.__pil_image.save(
+                stream, format=self.__stream_format
+            )
         elif self.mode == "stream":
             return self.__stream_save_functor
         raise ValueError(f"Unknown mode {self.mode}")
@@ -142,27 +164,35 @@ class DisplayableImage:
 
 def __send_to_display(
     displayable_image: DisplayableImage,
+    backend: Literal["auto", "timg", "term_image"],
     pbar: "tqdm.tqdm" = None,
 ):
     if notebook.is_notebook():
-        from io import BytesIO
-        from IPython.display import Image, display
+        from IPython.display import display
+
+        if backend != "auto":
+            raise ValueError(f"Cannot use backend '{backend}' in notebook")
 
         display(displayable_image.into_pil())
     else:
-        if which("timg"):
-            with TerminalImageViewer(get_stdout=pbar is not None) as viewer:
-                displayable_image.into_stream_save_functor()(viewer.stream)
-                if pbar is not None:
-                    out, err = viewer.program.communicate()
-                    pbar.write(out.decode())
-        else:
+        if backend in ("auto", "timg"):
+            if which("timg"):
+                with TerminalImageViewer(get_stdout=pbar is not None) as viewer:
+                    displayable_image.into_stream_save_functor()(viewer.stream)
+                    if pbar is not None:
+                        out, err = viewer.program.communicate()
+                        pbar.write(out.decode())
+            elif backend == "timg":
+                raise ValueError(f"Cannot use backend '{backend}' as binary not found!")
+        elif backend in ("auto", "term_image"):
             import pip_ensure_version
 
             pip_ensure_version.require_package("term_image")
             from term_image.image import AutoImage
 
             AutoImage(displayable_image.into_pil()).draw()
+        else:
+            raise NotImplementedError(f"Unknown backend {backend}")
 
 
 def module_was_imported(module_name: str):
@@ -189,10 +219,156 @@ def _get_new_shape_maintain_ratio(
     return new_shape
 
 
-def normalize_image(image: np.ndarray):
+def normalise(image: np.ndarray):
     _min = image.min()
     _max = image.max()
     return (image - _min) / (_max - _min)
+
+
+normalize = normalise
+
+
+@dataclass
+class ImageAnalyseResult:
+    stats: dict
+
+    @classmethod
+    def from_array_like(self, image) -> "ImageAnalyseResult":
+        if module_was_imported("torch"):
+            import torch
+
+            if isinstance(image, torch.Tensor):
+                image = image.detach().cpu().numpy()
+
+        return ImageAnalyseResult(
+            stats=dict(
+                mean=np.mean(image),
+                shape=image.shape,
+                dtype=image.dtype,
+                min=image.min(),
+                p01=np.percentile(image, 1),
+                p25=np.percentile(image, 25),
+                median=np.median(image),
+                p75=np.percentile(image, 75),
+                p99=np.percentile(image, 99),
+                max=image.max(),
+                __raw_image=image,
+            )
+        )
+
+    def get_inline_histogram(self, bins=16) -> str:
+        data = self.stats.get("__raw_image", None)
+        if data is None:
+            return ""
+
+        hist, _ = np.histogram(data, bins=bins)
+        spark_chars = " ▁▂▃▄▅▆▇█"
+
+        _max_value = len(spark_chars) - 1
+        # Normalize histogram to [0, 7]
+        # hist_scaled = np.clip(
+        #     (hist / hist.max()) * _max_value, 0, _max_value
+        # ).astype(int)
+        hist_scaled = np.ceil((hist / hist.max()) * _max_value).astype(int)
+        sparkline = "".join(spark_chars[val] for val in hist_scaled)
+
+        return f"{sparkline}"
+
+    def __str__(self) -> str:
+        import numbers
+
+        n_span_space = 2
+
+        def _pos(i, total):
+            if i == 0:
+                return "<"
+            elif i == total - 1:
+                return ">"
+            return "^"
+
+        def fmt(value, width=8, precision=3, pos="<"):
+            if isinstance(value, numbers.Number):
+                value_as_int = int(value)
+                if abs(value_as_int - value) > 1e-9:
+                    return f"{float(value):{pos}{width}.{precision}f}"
+                else:
+                    value = value_as_int
+            return f"{value:{pos}{width}}"
+
+        def format_line(
+            keys,
+            values,
+            # 1 sign, 1 decimal, 3 percision, 1-3 leading?
+            width=8,
+            precision=3,
+        ):
+            value_strs = [
+                fmt(v, width, precision, pos=_pos(i, len(values)))
+                for i, v in enumerate(values)
+            ]
+
+            def _format(k, i):
+                if i == 0:
+                    # add indicator
+                    k = f"^{k}"
+                elif i == len(keys) - 1:
+                    k = f"{k}^"
+                    # direction = ">"
+                return f"{k:{_pos(i, len(keys))}{width}}"
+
+            key_strs = [_format(k, i) for i, k in enumerate(keys)]
+            return (" " * n_span_space).join(value_strs), "  ".join(key_strs)
+
+        # Layout groups
+        # inject dummy to make it align with line2
+        line1_keys = ["min", "", "mean", "", "max"]
+        line1_values = [self.stats.get(k, "") for k in line1_keys]
+
+        line2_keys = ["p01", "p25", "median", "p75", "p99"]
+        line2_values = [self.stats[k] for k in line2_keys]
+
+        width = 8
+
+        # Format both lines
+        values1, keys1 = format_line(line1_keys, line1_values, width=width)
+        values2, keys2 = format_line(line2_keys, line2_values, width=width)
+
+        # Shape and dtype
+        shape_str = f"shape: {self.stats['shape']}"
+        dtype_str = f"dtype: {self.stats['dtype']}"
+
+        inline_hist = self.get_inline_histogram(
+            bins=width * len(line2_keys) + n_span_space * (len(line2_keys) - 1)
+        )
+
+        return f"""{shape_str}
+{dtype_str}\
+
+ .{inline_hist}.
+  {values1}
+  {keys1}
+  {values2}
+  {keys2}\
+
+"""
+
+
+def analyse(image: "np.ndarray | torch.Tensor") -> ImageAnalyseResult:
+    return ImageAnalyseResult.from_array_like(image)
+
+
+def make_displayable_image(img: PIL.Image) -> PIL.Image:
+    import re
+
+    bit_size = re.findall(r"\d+", img.mode)
+    bit_size = int(bit_size[0]) if bit_size else 8
+    if bit_size not in [8, 16, 32]:
+        raise ValueError(f"Unsupported file type, supported bit size is {bit_size}")
+    if bit_size != 8:
+        max_value = 2**bit_size - 1
+        img_arr = (np.array(img) / max_value) * 255.0
+        img = PIL.Image.fromarray(img_arr.astype(np.uint8))
+    return img.convert("L")
 
 
 def ensure_uint8_image(image: np.ndarray, as_uint16: bool = False):
@@ -271,7 +447,7 @@ class ArrayAutoFixer(ABC):
         _max = image.max()
         _warning_msg = None
         if normalise:
-            image = normalize_image(image)
+            image = normalize(image)
         elif _min < 0 or _max > 1:
             _warning_msg = (
                 "Given image is of float-type, but its value is not between [0, 1]."
@@ -513,6 +689,7 @@ def display(
     normalise: Optional[bool] = None,
     is_batched: Optional[bool] = None,
     is_grayscale: Optional[bool] = None,
+    backend: Literal["auto", "timg", "term_image"] = "auto",
 ) -> None:
     # if we are normalising, we need to convert the image to float32
     if normalise:
@@ -521,6 +698,8 @@ def display(
 
             if isinstance(image, torch.Tensor):
                 image = image.cpu().numpy()
+        if isinstance(image, PIL.Image.Image):
+            image = np.array(image)
         if isinstance(image, np.ndarray):
             image = image.astype(np.float32)
 
@@ -534,8 +713,10 @@ def display(
             return __send_to_display(
                 displayable_image=DisplayableImage(
                     stream_save_functor=lambda stream: image.savefig(stream),
+                    stream_format=format,
                 ),
                 pbar=pbar,
+                backend=backend,
             )
 
     #####################################################
@@ -558,13 +739,12 @@ def display(
 
     # if image is in 16bit, convert it to 8bit
     if image.mode == "I;16":
-        image = image.convert("L")
+        image = make_displayable_image(image)
 
     return __send_to_display(
-        displayable_image=DisplayableImage(
-            stream_save_functor=lambda stream: image.save(stream, format=format),
-        ),
+        displayable_image=DisplayableImage(pil_image=image),
         pbar=pbar,
+        backend=backend,
     )
 
     raise ValueError(f"Unknown format of type {type(image)} with input {image}")
