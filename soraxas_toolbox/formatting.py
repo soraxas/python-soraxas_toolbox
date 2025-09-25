@@ -1,24 +1,10 @@
-import abc
-import contextlib
+from __future__ import annotations
+
 import datetime
 import os
+
 from pathlib import Path
-from typing import Callable, Union
-
-
-class MagicDict(dict):
-    """Content is accessible like property."""
-
-    def __getattr__(self, attr):
-        """called when self.attr doesn't exist."""
-        return self[attr]
-
-    def __setattr__(self, attr, val):
-        """called setting attribute of this dict."""
-        self[attr] = val
-
-
-###########################################################################
+from typing import Union, Callable
 
 
 def convert_time_to_factor_and_unit(elapsed: float, fix_width=True):
@@ -97,25 +83,3 @@ def get_non_existing_filename(
             break
         suffix_num += 1
     return filename
-
-
-class ContextManager(metaclass=abc.ABCMeta):
-    """
-    Class which can be used as `contextmanager`.
-    Following patterns from: https://stackoverflow.com/questions/8720179/nesting-python-context-managers
-    """
-
-    def __init__(self):
-        self.__cm = None
-
-    @abc.abstractmethod
-    @contextlib.contextmanager
-    def contextmanager(self):
-        raise NotImplementedError("Abstract method")
-
-    def __enter__(self):
-        self.__cm = self.contextmanager()
-        return self.__cm.__enter__()
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        return self.__cm.__exit__(exc_type, exc_value, traceback)

@@ -1,5 +1,14 @@
 import torch
-import einops
+
+import lazy_import_plus
+
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    import einops
+else:
+    einops = lazy_import_plus.lazy_module("einops")
 
 
 def subdivide_img_into_blocks(img, blk_height=8, blk_width=8):

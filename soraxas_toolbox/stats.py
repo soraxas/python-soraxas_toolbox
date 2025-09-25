@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import List, Dict
 
-from . import ContextManager
+from .utils import ContextManager
 
 
 class StatsSaver(ContextManager):

@@ -1,10 +1,15 @@
-try:
+from typing import TYPE_CHECKING
+
+import torch
+import lazy_import_plus
+
+
+if TYPE_CHECKING:
     import matplotlib.pyplot as plt
     import numpy as np
-    import torch
-except Exception as e:
-    print("Error occured when importing dependencies:")
-    print(e)
+else:
+    np = lazy_import_plus.lazy_module("numpy")
+    plt = lazy_import_plus.lazy_module("matplotlib.pyplot")
 
 
 ############################################################

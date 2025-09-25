@@ -1,13 +1,9 @@
-try:
-    import datetime
-    import glob
-    import os
-    import shutil
+import datetime
+import glob
+import os
+import shutil
 
-    import torch
-except Exception as e:
-    print("Error occured when importing dependencies:")
-    print(e)
+import torch
 
 
 class Filename:

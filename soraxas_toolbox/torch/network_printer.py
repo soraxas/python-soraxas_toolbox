@@ -1,10 +1,6 @@
-try:
-    import inspect
+import inspect
 
-    import torch
-except Exception as e:
-    print("Error occured when importing dependencies:")
-    print(e)
+import torch
 
 
 ############################################################
@@ -120,10 +116,13 @@ class TorchNetworkPrinter(object):
     def print_net_name_insize(self, module, inx, depth):
         # first time printing
         if not self.banner_printed:
-            print_seq_line = lambda: self.p(
-                "-" * (self.width_name + self.width_insize + self.width_outsize),
-                end=True,
-            )
+
+            def print_seq_line():
+                self.p(
+                    "-" * (self.width_name + self.width_insize + self.width_outsize),
+                    end=True,
+                )
+
             print_seq_line()
             self._print_name("Network Name")
             self._print_insize("In Size")

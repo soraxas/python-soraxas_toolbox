@@ -1,8 +1,4 @@
-try:
-    import torch
-except Exception as e:
-    print("Error occured when importing dependencies:")
-    print(e)
+import torch
 
 
 ############################################################

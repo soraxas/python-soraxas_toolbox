@@ -2,7 +2,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from soraxas_toolbox.image import TorchArrayAutoFixer
+from .image import TorchArrayAutoFixer  # noqa E402
 
 
 def test_detect_tensor():

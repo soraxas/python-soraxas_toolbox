@@ -1,35 +1,60 @@
-from locale import normalize
+from __future__ import annotations
+# the future annotation allows type hinting for modules that does not exists
+
 import os
-import sys
 import math
 import warnings
+
 from shutil import which
 from subprocess import Popen, PIPE
 from abc import ABC
 from dataclasses import dataclass
-
+from typing import Literal
 from typing import IO, Callable, Optional, Tuple, Union, List, Any, TYPE_CHECKING
 
-import PIL.Image
-import numpy as np
+import lazy_import_plus
+import pip_ensure_version
+
+from . import utils
+from . import easy_with_blocks, notebook
+from ._lazy_import_workaround import MatplotlibTorchImportWorkaround
+
 
 if TYPE_CHECKING:
+    import PIL.Image
+    import numpy as np
     import tqdm
+    import matplotlib.pyplot as plt
     import torch
+    import torchvision
+    import re
+    import numbers
 
-from . import easy_with_blocks, notebook
+    from io import BytesIO
+else:
+    PIL = lazy_import_plus.lazy_module("PIL.Image", level="base")
+    np = lazy_import_plus.lazy_module("numpy")
+    tqdm = lazy_import_plus.lazy_module("tqdm")
+    plt = lazy_import_plus.lazy_module("matplotlib.pyplot")
+    torch = lazy_import_plus.lazy_module(
+        "torch", on_import=MatplotlibTorchImportWorkaround()
+    )
+    torchvision = lazy_import_plus.lazy_module("torchvision")
+    re = lazy_import_plus.lazy_module("re")
+    numbers = lazy_import_plus.lazy_module("numbers")
 
+    BytesIO = lazy_import_plus.lazy_module("io.BytesIO")
 
 ############################################################
 ##             Turn any matplotlib plt to img             ##
 ############################################################
 
 
-def read_as_array(path: str):
+def read_as_array(path: str) -> np.ndarray:
     return np.array(PIL.Image.open(path))
 
 
-def plt_fig_to_nparray(fig):
+def plt_fig_to_nparray(fig: plt.Figure) -> np.ndarray:
     """
     Takes a matplotlib figure handle and converts it using
     canvas and string-casts to a numpy array that can be
@@ -40,8 +65,6 @@ def plt_fig_to_nparray(fig):
     Return:
         np.array with shape = (x,y,d) where d=3
     """
-    import numpy as np
-    import matplotlib.pyplot as plt
 
     # remove white padding
     fig.tight_layout()
@@ -104,9 +127,6 @@ class TerminalImageViewer:
         return self.program.stdin
 
 
-from typing import Literal
-
-
 class DisplayableImage:
     """
     A wrapper that can hold either a PIL image or a stream save functor.
@@ -150,8 +170,6 @@ class DisplayableImage:
         Turn the image into PIL if it is not already.
         """
         if self.mode == "stream":
-            from io import BytesIO
-
             # create this tmp buffer on SELF to keep the file in memory
             self.__tmp_file_buffer = BytesIO()
             self.into_stream_save_functor()(self.__tmp_file_buffer)
@@ -168,12 +186,12 @@ def __send_to_display(
     pbar: "tqdm.tqdm" = None,
 ):
     if notebook.is_notebook():
-        from IPython.display import display
+        import IPython.display
 
         if backend != "auto":
             raise ValueError(f"Cannot use backend '{backend}' in notebook")
 
-        display(displayable_image.into_pil())
+        IPython.display(displayable_image.into_pil())
     else:
         if backend in ("auto", "timg"):
             if which("timg"):
@@ -185,18 +203,12 @@ def __send_to_display(
             elif backend == "timg":
                 raise ValueError(f"Cannot use backend '{backend}' as binary not found!")
         elif backend in ("auto", "term_image"):
-            import pip_ensure_version
-
             pip_ensure_version.require_package("term_image")
             from term_image.image import AutoImage
 
             AutoImage(displayable_image.into_pil()).draw()
         else:
             raise NotImplementedError(f"Unknown backend {backend}")
-
-
-def module_was_imported(module_name: str):
-    return module_name in sys.modules
 
 
 def _get_new_shape_maintain_ratio(
@@ -234,9 +246,7 @@ class ImageAnalyseResult:
 
     @classmethod
     def from_array_like(self, image) -> "ImageAnalyseResult":
-        if module_was_imported("torch"):
-            import torch
-
+        if utils.module_was_imported("torch"):
             if isinstance(image, torch.Tensor):
                 image = image.detach().cpu().numpy()
 
@@ -275,8 +285,6 @@ class ImageAnalyseResult:
         return f"{sparkline}"
 
     def __str__(self) -> str:
-        import numbers
-
         n_span_space = 2
 
         def _pos(i, total):
@@ -353,13 +361,11 @@ class ImageAnalyseResult:
 """
 
 
-def analyse(image: "np.ndarray | torch.Tensor") -> ImageAnalyseResult:
+def stats(image: "np.ndarray | torch.Tensor") -> ImageAnalyseResult:
     return ImageAnalyseResult.from_array_like(image)
 
 
 def make_displayable_image(img: PIL.Image) -> PIL.Image:
-    import re
-
     bit_size = re.findall(r"\d+", img.mode)
     bit_size = int(bit_size[0]) if bit_size else 8
     if bit_size not in [8, 16, 32]:
@@ -491,8 +497,6 @@ class TorchArrayAutoFixer(ArrayAutoFixer):
 
 
 def __handle_torch_image(image, normalise, is_grayscale, is_batched, target_size):
-    import torch
-
     image = image.to("cpu")
 
     if image.dtype == torch.uint8:
@@ -563,8 +567,6 @@ def concat_images(
     if len(images) <= 1:
         return images[0]
 
-    import PIL.Image
-
     # compute grid size
     if max_cols:
         ncols = min(max_cols, len(images))
@@ -612,65 +614,54 @@ def __to_pil_image(
     is_batched: Optional[bool] = None,
     is_grayscale: Optional[bool] = None,
 ):
-    if module_was_imported("numpy") and module_was_imported("PIL"):
-        import numpy
+    if utils.module_was_imported("numpy") and isinstance(image, np.ndarray):
+        NumpyArrayAutoFixer.cls_var_setter(module=np)
+        if image.dtype in NumpyArrayAutoFixer.float_types():
+            # scale if necessary
+            image = NumpyArrayAutoFixer.fix_float_range(image, normalise=normalise)
+        else:
+            if normalize:
+                # we still need to normalize if its not float
+                ori_dtype = image.dtype
+                image = image.astype(np.float32)
+                image = (image - image.min()) / (image.max() - image.min())
+                image = image.astype(ori_dtype)
+        # to uint8 if necessary
+        image = NumpyArrayAutoFixer.fix_channel(image)
+        image = NumpyArrayAutoFixer.fix_dtype(image)
 
-        if isinstance(image, numpy.ndarray):
-            NumpyArrayAutoFixer.cls_var_setter(module=numpy)
-            if image.dtype in NumpyArrayAutoFixer.float_types():
-                # scale if necessary
-                image = NumpyArrayAutoFixer.fix_float_range(image, normalise=normalise)
-            else:
-                if normalize:
-                    # we still need to normalize if its not float
-                    ori_dtype = image.dtype
-                    image = image.astype(numpy.float32)
-                    image = (image - image.min()) / (image.max() - image.min())
-                    image = image.astype(ori_dtype)
-            # to uint8 if necessary
-            image = NumpyArrayAutoFixer.fix_channel(image)
-            image = NumpyArrayAutoFixer.fix_dtype(image)
+        image = PIL.Image.fromarray(image)
 
-            image = PIL.Image.fromarray(image)
+        if target_size is not None:
+            image = image.resize(_get_new_shape_maintain_ratio(target_size, image.size))
+        return image
 
-            if target_size is not None:
-                image = image.resize(
-                    _get_new_shape_maintain_ratio(target_size, image.size)
-                )
-            return image
-
-    if module_was_imported("torch"):
-        import torch
-
-        if isinstance(image, torch.Tensor):
-            TorchArrayAutoFixer.cls_var_setter(module=torch)
-
-            with torch.no_grad():
-                with easy_with_blocks.NoMissingModuleError(strong_warning=True):
-                    import torchvision
-
-                    # the following should be a list of 3D array
-                    image = (
-                        torchvision.utils.make_grid(
-                            __handle_torch_image(
-                                image=image,
-                                normalise=normalise,
-                                is_grayscale=is_grayscale,
-                                target_size=target_size,
-                                is_batched=is_batched,
-                            )
+    if utils.module_was_imported("torch") and isinstance(image, torch.Tensor):
+        TorchArrayAutoFixer.cls_var_setter(module=torch)
+        with torch.no_grad():
+            with easy_with_blocks.NoMissingModuleError(strong_warning=True):
+                # the following should be a list of 3D array
+                image = (
+                    torchvision.utils.make_grid(
+                        __handle_torch_image(
+                            image=image,
+                            normalise=normalise,
+                            is_grayscale=is_grayscale,
+                            target_size=target_size,
+                            is_batched=is_batched,
                         )
-                        .mul(255)
-                        .clamp_(0, 255)
-                        .permute(1, 2, 0)
-                        .to("cpu", torch.uint8)
-                        .numpy()
                     )
-                    # .add_(0.5)
+                    .mul(255)
+                    .clamp_(0, 255)
+                    .permute(1, 2, 0)
+                    .to("cpu", torch.uint8)
+                    .numpy()
+                )
+                # .add_(0.5)
 
-                    return PIL.Image.fromarray(image)
+                return PIL.Image.fromarray(image)
 
-    if isinstance(image, PIL.Image.Image):
+    if utils.module_was_imported("PIL") and isinstance(image, PIL.Image.Image):
         if target_size is not None:
             image = image.resize(_get_new_shape_maintain_ratio(target_size, image.size))
         return image
@@ -693,9 +684,7 @@ def display(
 ) -> None:
     # if we are normalising, we need to convert the image to float32
     if normalise:
-        if module_was_imported("torch"):
-            import torch
-
+        if utils.module_was_imported("torch"):
             if isinstance(image, torch.Tensor):
                 image = image.cpu().numpy()
         if isinstance(image, PIL.Image.Image):
@@ -703,10 +692,8 @@ def display(
         if isinstance(image, np.ndarray):
             image = image.astype(np.float32)
 
-    if module_was_imported("matplotlib"):
-        import matplotlib.figure
-
-        if isinstance(image, matplotlib.figure.Figure):
+    if utils.module_was_imported("matplotlib"):
+        if isinstance(image, plt.Figure):
             if len(more_images) > 0:
                 raise NotImplementedError("matplotlib does not support multi image")
 
@@ -751,13 +738,11 @@ def display(
 
 
 def view_high_dimensional_embeddings(
-    x: "np.ndarray", label=None, title="High-d embeddings"
+    x: np.ndarray, label=None, title="High-d embeddings"
 ):
     from sklearn.manifold import TSNE
     import seaborn as sns
     import pandas as pd
-    import numpy as np
-    import matplotlib.pyplot as plt
 
     if label is not None:
         assert len(label) == x.shape[0], f"{len(label)} != {x.shape}"

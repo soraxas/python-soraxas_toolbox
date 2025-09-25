@@ -13,7 +13,10 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/soraxas/pytoolbox",
     packages=setuptools.find_packages(),
-    install_requires=["pip-ensure-version>=1.0.1"],
+    install_requires=[
+        "pip-ensure-version>=1.0.1",
+        "lazy-import-plus>=0.0.2",
+    ],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
@@ -29,6 +32,7 @@ setuptools.setup(
             "typer>=0.9.0",
             "matplotlib",
             "term-image",
+            "loguru",
         ],
     },
 )
