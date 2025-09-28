@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     import PIL.Image
     import numpy as np
     import matplotlib.pyplot as plt
+    import loguru
 else:
     PIL = lazy_import_plus.lazy_module("PIL.Image", level="base")
     np = lazy_import_plus.lazy_module("numpy")
@@ -32,7 +33,12 @@ def stats(image_path: Path):
 
 
 @app.command()
-def histogram(image_path: Path, bins: int = 150, ylog: bool = False):
+def histogram(
+    image_path: Path,
+    bins: int = 150,
+    ylog: bool = False,
+    display_backend: st.image.DisplayBackendT = "auto",
+):
     """Plot the histogram of the given image file."""
     img = st.image.read_as_array(image_path)
 
@@ -43,7 +49,7 @@ def histogram(image_path: Path, bins: int = 150, ylog: bool = False):
     except ValueError:
         typer.Exit(code=1)
 
-    st.image.display(fig)
+    st.image.display(fig, backend=display_backend)
 
 
 @app.command()
@@ -52,6 +58,7 @@ def display(
     normalise: bool = False,
     clip_low: float | None = None,
     clip_high: float | None = None,
+    display_backend: st.image.DisplayBackendT = "auto",
 ):
     """Display the given image file."""
     img = PIL.Image.open(image_path)
@@ -87,7 +94,7 @@ def display(
             f"Image data type after clipping and normalization: {img.dtype}, range: ({img.min()}, {img.max()})"
         )
 
-    st.image.display(img, normalise=normalise)
+    st.image.display(img, normalise=normalise, backend=display_backend)
 
 
 def main():

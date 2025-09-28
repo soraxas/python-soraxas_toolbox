@@ -20,6 +20,8 @@ from . import easy_with_blocks, notebook
 from ._lazy_import_workaround import MatplotlibTorchImportWorkaround
 
 
+DisplayBackendT = Literal["auto", "timg", "term_image"]
+
 if TYPE_CHECKING:
     import PIL.Image
     import numpy as np
@@ -30,7 +32,7 @@ if TYPE_CHECKING:
     import re
     import numbers
 
-    from io import BytesIO
+    import io.BytesIO
 else:
     PIL = lazy_import_plus.lazy_module("PIL.Image", level="base")
     np = lazy_import_plus.lazy_module("numpy")
@@ -43,7 +45,7 @@ else:
     re = lazy_import_plus.lazy_module("re")
     numbers = lazy_import_plus.lazy_module("numbers")
 
-    BytesIO = lazy_import_plus.lazy_module("io.BytesIO")
+    io = lazy_import_plus.lazy_module("io")
 
 ############################################################
 ##             Turn any matplotlib plt to img             ##
@@ -133,7 +135,7 @@ class DisplayableImage:
     """
 
     mode: Literal["pil", "stream"]
-    __tmp_file_buffer: Optional["BytesIO"] = None
+    __tmp_file_buffer: Optional["io.BytesIO"] = None
 
     def __init__(
         self,
@@ -171,7 +173,8 @@ class DisplayableImage:
         """
         if self.mode == "stream":
             # create this tmp buffer on SELF to keep the file in memory
-            self.__tmp_file_buffer = BytesIO()
+            print(io.BytesIO)
+            self.__tmp_file_buffer = io.BytesIO()
             self.into_stream_save_functor()(self.__tmp_file_buffer)
             return PIL.Image.open(self.__tmp_file_buffer)
 
@@ -182,7 +185,7 @@ class DisplayableImage:
 
 def __send_to_display(
     displayable_image: DisplayableImage,
-    backend: Literal["auto", "timg", "term_image"],
+    backend: DisplayBackendT,
     pbar: "tqdm.tqdm" = None,
 ):
     if notebook.is_notebook():
@@ -680,7 +683,7 @@ def display(
     normalise: Optional[bool] = None,
     is_batched: Optional[bool] = None,
     is_grayscale: Optional[bool] = None,
-    backend: Literal["auto", "timg", "term_image"] = "auto",
+    backend: DisplayBackendT = "auto",
 ) -> None:
     # if we are normalising, we need to convert the image to float32
     if normalise:
