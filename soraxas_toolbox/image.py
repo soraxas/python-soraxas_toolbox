@@ -214,7 +214,7 @@ def __send_to_display(
             raise NotImplementedError(f"Unknown backend {backend}")
 
 
-def _get_new_shape_maintain_ratio(
+def get_new_shape_maintain_ratio(
     target_size: Union[Tuple, List, float, int], current_shape: Tuple[int, int]
 ):
     if isinstance(target_size, (tuple, list)):
@@ -547,7 +547,7 @@ def __handle_torch_image(image, normalise, is_grayscale, is_batched, target_size
 
         image = F.interpolate(
             image,
-            size=_get_new_shape_maintain_ratio(target_size, image.shape[-2:]),
+            size=get_new_shape_maintain_ratio(target_size, image.shape[-2:]),
         )
     return image
 
@@ -617,26 +617,38 @@ def __to_pil_image(
     is_batched: Optional[bool] = None,
     is_grayscale: Optional[bool] = None,
 ):
+    if utils.module_was_imported("torch") and not utils.module_was_imported(
+        "torchvision"
+    ):
+        # fallback as numpy
+        if isinstance(image, torch.Tensor):
+            image = image.detach().cpu().numpy()
+
     if utils.module_was_imported("numpy") and isinstance(image, np.ndarray):
         NumpyArrayAutoFixer.cls_var_setter(module=np)
-        if image.dtype in NumpyArrayAutoFixer.float_types():
-            # scale if necessary
-            image = NumpyArrayAutoFixer.fix_float_range(image, normalise=normalise)
-        else:
-            if normalize:
-                # we still need to normalize if its not float
-                ori_dtype = image.dtype
-                image = image.astype(np.float32)
-                image = (image - image.min()) / (image.max() - image.min())
-                image = image.astype(ori_dtype)
-        # to uint8 if necessary
-        image = NumpyArrayAutoFixer.fix_channel(image)
-        image = NumpyArrayAutoFixer.fix_dtype(image)
 
-        image = PIL.Image.fromarray(image)
+        image = NumpyArrayAutoFixer.fix_channel(image)
 
         if target_size is not None:
-            image = image.resize(_get_new_shape_maintain_ratio(target_size, image.size))
+            # we are doing resize first as it might reduce work needed for normalise
+            # COSTLY bi-directional roundtrip
+            _img_pil = PIL.Image.fromarray(image)
+            _img_pil = _img_pil.resize(
+                get_new_shape_maintain_ratio(target_size, _img_pil.size)
+            )
+            image = np.asarray(_img_pil)
+
+        if image.dtype not in NumpyArrayAutoFixer.float_types() and normalise:
+            # need to be in float to do normalise
+            image = image.astype(np.float32)
+
+        if image.dtype in NumpyArrayAutoFixer.float_types():
+            image = NumpyArrayAutoFixer.fix_float_range(image, normalise=normalise)
+
+        # to uint8 if necessary
+        image = NumpyArrayAutoFixer.fix_dtype(image)
+        image = PIL.Image.fromarray(image)
+
         return image
 
     if utils.module_was_imported("torch") and isinstance(image, torch.Tensor):
@@ -666,7 +678,7 @@ def __to_pil_image(
 
     if utils.module_was_imported("PIL") and isinstance(image, PIL.Image.Image):
         if target_size is not None:
-            image = image.resize(_get_new_shape_maintain_ratio(target_size, image.size))
+            image = image.resize(get_new_shape_maintain_ratio(target_size, image.size))
         return image
 
     raise ValueError(f"Unknown format of type {type(image)} with input {image}")
