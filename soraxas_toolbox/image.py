@@ -246,9 +246,10 @@ normalize = normalise
 @dataclass
 class ImageAnalyseResult:
     stats: dict
+    kwargs: dict
 
     @classmethod
-    def from_array_like(self, image) -> "ImageAnalyseResult":
+    def from_array_like(self, image, **kwargs) -> "ImageAnalyseResult":
         if utils.module_was_imported("torch"):
             if isinstance(image, torch.Tensor):
                 image = image.detach().cpu().numpy()
@@ -266,7 +267,8 @@ class ImageAnalyseResult:
                 p99=np.percentile(image, 99),
                 max=image.max(),
                 __raw_image=image,
-            )
+            ),
+            kwargs=kwargs,
         )
 
     def get_inline_histogram(self, bins=16) -> str:
@@ -274,7 +276,14 @@ class ImageAnalyseResult:
         if data is None:
             return ""
 
-        hist, _ = np.histogram(data, bins=bins)
+        if "display_min" in self.kwargs or "display_max" in self.kwargs:
+            _range = (
+                self.kwargs.get("display_min", self.stats["min"]),
+                self.kwargs.get("display_max", self.stats["max"]),
+            )
+        else:
+            _range = None
+        hist, _ = np.histogram(data, bins=bins, range=_range)
         spark_chars = " ▁▂▃▄▅▆▇█"
 
         _max_value = len(spark_chars) - 1
@@ -364,8 +373,8 @@ class ImageAnalyseResult:
 """
 
 
-def stats(image: "np.ndarray | torch.Tensor") -> ImageAnalyseResult:
-    return ImageAnalyseResult.from_array_like(image)
+def stats(image: "np.ndarray | torch.Tensor", **kwargs) -> ImageAnalyseResult:
+    return ImageAnalyseResult.from_array_like(image, **kwargs)
 
 
 def make_displayable_image(img: PIL.Image) -> PIL.Image:
