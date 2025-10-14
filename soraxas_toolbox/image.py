@@ -674,7 +674,7 @@ def __to_pil_image(
 
         # to uint8 if necessary
         image = NumpyArrayAutoFixer.fix_dtype(image)
-        image = PIL.Image.fromarray(image)
+        image = PIL.Image.fromarray(ensure_uint8_image(image))
 
         return image
 
