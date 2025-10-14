@@ -234,6 +234,24 @@ def get_new_shape_maintain_ratio(
     return new_shape
 
 
+def resize_max_length(
+    image: np.ndarray | PIL.Image, target_size: Union[Tuple, List, float, int]
+):
+    _original_type: Literal["array", "pillow"] = None
+    if isinstance(image, np.ndarray):
+        _original_type = "array"
+    elif isinstance(image, PIL.Image):
+        _original_type = "pillow"
+    else:
+        raise ValueError(f"Unsupported type: {_original_type}")
+    if _original_type != "pillow":
+        image = PIL.Image.fromarray(image)
+    image = image.resize(get_new_shape_maintain_ratio(target_size, image.size))
+    if _original_type == "array":
+        image = np.asarray(image)
+    return image
+
+
 def normalise(image: np.ndarray):
     _min = image.min()
     _max = image.max()
