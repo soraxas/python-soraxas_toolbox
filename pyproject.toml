@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "soraxas_toolbox"
+version = "0.1.6"
+description = "A simple packaged toolbox for various scenario"
+readme = "README.md"
+requires-python = ">=3.7"
+license = { text = "MIT" }
+authors = [
+    { name = "soraxas", email = "oscar@tinyiu.com" }
+]
+dependencies = [
+    "pip-ensure-version>=1.0.1",
+    "lazy-import-plus>=0.0.2",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+cli = [
+    "typer>=0.9.0",
+    "matplotlib",
+    "term-image",
+    "loguru",
+]
+
+[project.urls]
+Homepage = "https://github.com/soraxas/pytoolbox"
+
+[project.scripts]
+st = "soraxas_toolbox.cli:main"
+
