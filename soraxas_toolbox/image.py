@@ -272,7 +272,13 @@ def resize(
         raise ValueError(f"Unsupported type: {_original_type}")
 
     if backend == "pillow":
-        image = ensure_is_pillow(image)
+        try:
+            image = ensure_is_pillow(image)
+        except TypeError as e:
+            raise TypeError(
+                "There seems to be some type error."
+                "Maybe opencv (with backend='cv2') would support your image format?"
+            ) from e
         image = image.resize(new_shape)
     elif backend == "cv2":
         import cv2
