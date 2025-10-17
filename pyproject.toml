@@ -36,3 +36,14 @@ Homepage = "https://github.com/soraxas/pytoolbox"
 [project.scripts]
 st = "soraxas_toolbox.cli:main"
 
+[dependency-groups]
+# development dependency groups
+dev = [
+    "matplotlib",
+    "numpy",
+    "pillow",
+    "term-image>=0.7.2",
+    "torch",
+    "torchvision",
+    "tqdm",
+]

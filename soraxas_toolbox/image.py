@@ -1,5 +1,6 @@
 from __future__ import annotations
 # the future annotation allows type hinting for modules that does not exists
+# pyright: reportPrivateImportUsage=false
 
 import os
 import math
@@ -9,7 +10,7 @@ from shutil import which
 from subprocess import Popen, PIPE
 from abc import ABC
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, Sequence
 from typing import IO, Callable, Optional, Tuple, Union, List, Any, TYPE_CHECKING
 
 import lazy_import_plus
@@ -27,17 +28,18 @@ if TYPE_CHECKING:
     import numpy as np
     import tqdm
     import matplotlib.pyplot as plt
+    import matplotlib as mpl
     import torch
     import torchvision
     import re
     import numbers
-
-    import io.BytesIO
+    import io
 else:
     PIL = lazy_import_plus.lazy_module("PIL.Image", level="base")
     np = lazy_import_plus.lazy_module("numpy")
     tqdm = lazy_import_plus.lazy_module("tqdm")
     plt = lazy_import_plus.lazy_module("matplotlib.pyplot")
+    mpl = lazy_import_plus.lazy_module("matplotlib")
     torch = lazy_import_plus.lazy_module(
         "torch", on_import=MatplotlibTorchImportWorkaround()
     )
@@ -126,6 +128,7 @@ class TerminalImageViewer:
 
     @property
     def stream(self) -> IO:
+        assert self.program.stdin is not None
         return self.program.stdin
 
 
@@ -139,8 +142,8 @@ class DisplayableImage:
 
     def __init__(
         self,
-        pil_image: PIL.Image.Image = None,
-        stream_save_functor: Callable[[IO], None] = None,
+        pil_image: PIL.Image.Image | None = None,
+        stream_save_functor: Callable[[IO], None] | None = None,
         stream_format: str = "bmp",
     ):
         if pil_image is not None and stream_save_functor is None:
@@ -151,7 +154,7 @@ class DisplayableImage:
             raise ValueError(
                 "Either pil_image or stream must be provided, but not both."
             )
-        self.__pil_image = pil_image
+        self.__pil_image: PIL.Image.Image | None = pil_image
         self.__stream_save_functor = stream_save_functor
         self.__stream_format = stream_format
 
@@ -186,7 +189,7 @@ class DisplayableImage:
 def __send_to_display(
     displayable_image: DisplayableImage,
     backend: DisplayBackendT,
-    pbar: "tqdm.tqdm" = None,
+    pbar: tqdm.tqdm | None = None,
 ):
     if notebook.is_notebook():
         import IPython.display
@@ -194,7 +197,7 @@ def __send_to_display(
         if backend != "auto":
             raise ValueError(f"Cannot use backend '{backend}' in notebook")
 
-        IPython.display(displayable_image.into_pil())
+        IPython.display.display(displayable_image.into_pil())
     else:
         if backend in ("auto", "timg"):
             if which("timg"):
@@ -215,11 +218,12 @@ def __send_to_display(
 
 
 def get_new_shape_maintain_ratio(
-    target_size: Union[Tuple, List, float, int], current_shape: Tuple[int, int]
-):
+    target_size: Union[Tuple, List, float, int],
+    current_shape: Tuple[int, int],
+    mode: Literal["max", "min"] = "max",
+) -> Sequence[int]:
     if isinstance(target_size, (tuple, list)):
-        # no need to do anything
-        return target_size
+        target_size = max(target_size) if mode == "max" else min(target_size)
 
     assert isinstance(target_size, (int, float))
 
@@ -235,9 +239,9 @@ def get_new_shape_maintain_ratio(
 
 
 def resize_max_length(
-    image: np.ndarray | PIL.Image, target_size: Union[Tuple, List, float, int]
+    image: np.ndarray | PIL.Image.Image, target_size: Union[Tuple, List, float, int]
 ):
-    _original_type: Literal["array", "pillow"] = None
+    _original_type: Literal["array", "pillow"] | None = None
     if isinstance(image, np.ndarray):
         _original_type = "array"
     elif isinstance(image, PIL.Image):
@@ -267,7 +271,7 @@ class ImageAnalyseResult:
     kwargs: dict
 
     @classmethod
-    def from_array_like(self, image, **kwargs) -> "ImageAnalyseResult":
+    def from_array_like(cls, image, **kwargs) -> "ImageAnalyseResult":
         if utils.module_was_imported("torch"):
             if isinstance(image, torch.Tensor):
                 image = image.detach().cpu().numpy()
@@ -324,7 +328,7 @@ class ImageAnalyseResult:
                 return ">"
             return "^"
 
-        def fmt(value, width=8, precision=3, pos="<"):
+        def fmt(value, width: int = 8, precision: int = 3, pos: str = "<"):
             if isinstance(value, numbers.Number):
                 value_as_int = int(value)
                 if abs(value_as_int - value) > 1e-9:
@@ -395,7 +399,7 @@ def stats(image: "np.ndarray | torch.Tensor", **kwargs) -> ImageAnalyseResult:
     return ImageAnalyseResult.from_array_like(image, **kwargs)
 
 
-def make_displayable_image(img: PIL.Image) -> PIL.Image:
+def make_displayable_image(img: PIL.Image.Image) -> PIL.Image.Image:
     bit_size = re.findall(r"\d+", img.mode)
     bit_size = int(bit_size[0]) if bit_size else 8
     if bit_size not in [8, 16, 32]:
@@ -640,7 +644,7 @@ def concat_images(
 def __to_pil_image(
     image,
     normalise: Optional[bool] = None,
-    target_size: Tuple[int, int] = None,
+    target_size: Tuple[int, int] | int | None = None,
     is_batched: Optional[bool] = None,
     is_grayscale: Optional[bool] = None,
 ):
@@ -712,11 +716,11 @@ def __to_pil_image(
 
 
 def display(
-    image: Union[np.ndarray, PIL.Image.Image, "torch.Tensor"],
+    image: Union[np.ndarray, PIL.Image.Image, "torch.Tensor", plt.Figure],
     *more_images,
-    max_cols: int = None,
-    target_size: Tuple[int, int] = None,
-    pbar: "tqdm.tqdm" = None,
+    max_cols: int | None = None,
+    target_size: Tuple[int, int] | None = None,
+    pbar: tqdm.tqdm | None = None,
     format: str = "bmp",
     #
     normalise: Optional[bool] = None,

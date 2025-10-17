@@ -1,4 +1,5 @@
 from __future__ import annotations
+# pyright: reportPrivateImportUsage=false
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -43,7 +44,7 @@ def imshow_with_cbar(fig: plt.Figure, ax: plt.Axes, data: np.ndarray, **kwargs):
     fig.colorbar(im1, cax=cax, orientation="vertical")
 
 
-def subplots_auto_figsize(
+def subplots(
     nrows,
     ncols: int = 1,
     figsize=None,
@@ -72,7 +73,11 @@ def subplots_auto_figsize(
 
 
 def histogram(
-    img: np.ndarray, bins: int = 150, ylog: bool = False, partile_title: str = ""
+    img: np.ndarray,
+    bins: int = 150,
+    ylog: bool = False,
+    partile_title: str = "",
+    title="",
 ) -> plt.Figure:
     plt.figure()
     if img.ndim == 2:
@@ -95,7 +100,7 @@ def histogram(
         print("Unsupported image format.")
         raise ValueError()
 
-    if partile_title:
+    if not title and partile_title:
         title = f"{partial_title} ({partile_title})"
 
     plt.title(title)
