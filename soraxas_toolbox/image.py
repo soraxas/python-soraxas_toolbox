@@ -1,6 +1,7 @@
 from __future__ import annotations
 # the future annotation allows type hinting for modules that does not exists
 # pyright: reportPrivateImportUsage=false
+# pyright: reportAssignmentType=false
 
 import os
 import math
@@ -10,7 +11,7 @@ from shutil import which
 from subprocess import Popen, PIPE
 from abc import ABC
 from dataclasses import dataclass
-from typing import Literal, Sequence, cast
+from typing import Literal, Sequence, TypeVar, cast
 from typing import IO, Callable, Optional, Tuple, Union, List, Any, TYPE_CHECKING
 
 import lazy_import_plus
@@ -256,11 +257,16 @@ def ensure_is_pillow(img) -> PIL.Image.Image:
         raise NotImplementedError(f"unknown type: {type(img)}")
 
 
+T = TypeVar("T", np.ndarray, PIL.Image.Image)
+
+
 def resize(
-    image: np.ndarray | PIL.Image.Image,
+    image: T,  # pyright: ignore[reportRedeclaration]
     target_size: Union[Sequence[int], float, int],
     backend: Literal["pillow", "cv2"] = "pillow",
-):
+) -> T:
+    # pyright: ignore[reportAssignmentType]
+
     _original_type: Literal["array", "pillow"] | None = None
     if isinstance(image, np.ndarray):
         _original_type = "array"
@@ -283,14 +289,14 @@ def resize(
     elif backend == "cv2":
         import cv2
 
-        image = ensure_is_numpy(image)
+        image: np.ndarray = ensure_is_numpy(image)
         image = cv2.resize(image, (new_shape[1], new_shape[0]))
 
     if _original_type == "array":
         image = ensure_is_numpy(image)
     elif _original_type == "pillow":
         image = ensure_is_pillow(image)
-    return image
+    return cast(T, image)
 
 
 def normalise(image: np.ndarray):
@@ -695,16 +701,12 @@ def __to_pil_image(
     if utils.module_was_imported("numpy") and isinstance(image, np.ndarray):
         NumpyArrayAutoFixer.cls_var_setter(module=np)
 
-        image = NumpyArrayAutoFixer.fix_channel(image)
+        image: np.ndarray = NumpyArrayAutoFixer.fix_channel(image)
 
         if target_size is not None:
             # we are doing resize first as it might reduce work needed for normalise
             # COSTLY bi-directional roundtrip
-            _img_pil = PIL.Image.fromarray(image)
-            _img_pil = _img_pil.resize(
-                get_new_shape_maintain_ratio(target_size, _img_pil.size)
-            )
-            image = np.asarray(_img_pil)
+            image = cast(np.ndarray, resize(image, target_size=target_size))
 
         if image.dtype not in NumpyArrayAutoFixer.float_types() and normalise:
             # need to be in float to do normalise
@@ -741,15 +743,11 @@ def __to_pil_image(
                     .numpy()
                 )
                 # .add_(0.5)
-
                 return PIL.Image.fromarray(image)
 
-    if utils.module_was_imported("PIL") and isinstance(image, PIL.Image.Image):
-        if target_size is not None:
-            image = image.resize(get_new_shape_maintain_ratio(target_size, image.size))
-        return image
-
-    raise ValueError(f"Unknown format of type {type(image)} with input {image}")
+    if target_size is not None:
+        image = resize(image, target_size=target_size)
+    return image
 
 
 def display(
