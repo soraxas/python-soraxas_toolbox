@@ -10,7 +10,7 @@ from shutil import which
 from subprocess import Popen, PIPE
 from abc import ABC
 from dataclasses import dataclass
-from typing import Literal, Sequence
+from typing import Literal, Sequence, cast
 from typing import IO, Callable, Optional, Tuple, Union, List, Any, TYPE_CHECKING
 
 import lazy_import_plus
@@ -218,10 +218,10 @@ def __send_to_display(
 
 
 def get_new_shape_maintain_ratio(
-    target_size: Union[Tuple, List, float, int],
+    target_size: Union[Sequence[int], float, int],
     current_shape: Tuple[int, int],
     mode: Literal["max", "min"] = "max",
-) -> Sequence[int]:
+) -> tuple[int, int]:
     if isinstance(target_size, (tuple, list)):
         target_size = max(target_size) if mode == "max" else min(target_size)
 
@@ -235,24 +235,55 @@ def get_new_shape_maintain_ratio(
     new_shape = [0, 0]
     new_shape[i1] = int(target_size)
     new_shape[i2] = int(math.ceil(target_size * ratio))
-    return new_shape
+    return cast(tuple[int, int], new_shape)
 
 
-def resize_max_length(
-    image: np.ndarray | PIL.Image.Image, target_size: Union[Tuple, List, float, int]
+def ensure_is_numpy(img) -> np.ndarray:
+    if isinstance(img, np.ndarray):
+        return img
+    elif isinstance(img, PIL.Image.Image):
+        return np.asarray(img)
+    else:
+        raise NotImplementedError(f"unknown type: {type(img)}")
+
+
+def ensure_is_pillow(img) -> PIL.Image.Image:
+    if isinstance(img, np.ndarray):
+        return PIL.Image.fromarray(img)
+    elif isinstance(img, PIL.Image.Image):
+        return img
+    else:
+        raise NotImplementedError(f"unknown type: {type(img)}")
+
+
+def resize(
+    image: np.ndarray | PIL.Image.Image,
+    target_size: Union[Sequence[int], float, int],
+    backend: Literal["pillow", "cv2"] = "pillow",
 ):
     _original_type: Literal["array", "pillow"] | None = None
     if isinstance(image, np.ndarray):
         _original_type = "array"
+        new_shape = get_new_shape_maintain_ratio(target_size, image.shape[:2])
     elif isinstance(image, PIL.Image):
         _original_type = "pillow"
+        new_shape = get_new_shape_maintain_ratio(target_size, image.size)
     else:
         raise ValueError(f"Unsupported type: {_original_type}")
-    if _original_type != "pillow":
-        image = PIL.Image.fromarray(image)
-    image = image.resize(get_new_shape_maintain_ratio(target_size, image.size))
+
+    if backend == "pillow":
+        image = ensure_is_pillow(image)
+        image = image.resize(new_shape)
+    elif backend == "cv2":
+        import cv2
+
+        image = ensure_is_numpy(image)
+        image = cv2.resize(image, (new_shape[1], new_shape[0]))
+
     if _original_type == "array":
-        image = np.asarray(image)
+        image = ensure_is_numpy(image)
+    elif _original_type == "pillow":
+        image = ensure_is_pillow(image)
     return image
 
 

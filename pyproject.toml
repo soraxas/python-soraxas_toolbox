@@ -41,6 +41,7 @@ st = "soraxas_toolbox.cli:main"
 dev = [
     "matplotlib",
     "numpy",
+    "opencv-python>=4.11.0.86",
     "pillow",
     "term-image>=0.7.2",
     "torch",
