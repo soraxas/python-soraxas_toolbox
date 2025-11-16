@@ -4,12 +4,12 @@ import torch
 
 
 ############################################################
-##                  TorchNetowrkPrinter                  ##
+##                  TorchNetworkPrinter                  ##
 ############################################################
 
 
 class TorchNetworkPrinter(object):
-    """This class patches nn.Module so it would print the netowrk
+    """This class patches nn.Module so it would print the network
     architecture automatically as it performs forward pass."""
 
     def __init__(
@@ -146,7 +146,7 @@ class TorchNetworkPrinter(object):
     def print_net_outsize(self, module, outx, depth):
         if not self._check_same_guard(module):
             # this is a line with only outsize.
-            # print the correct spacing. The 1 offset is to force the arrow line up with previous innser-netowrks
+            # print the correct spacing. The 1 offset is to force the arrow line up with previous innser-networks
             printed_stack_depth = self.print_stack_depth(depth, offset=1, symbol="↳")
             self._print_name("", width_offset=-printed_stack_depth)
             self._print_insize("")

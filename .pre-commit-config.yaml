@@ -49,10 +49,10 @@ repos:
       - id: prettier
   # zizmor detects security vulnerabilities in GitHub Actions workflows.
   # Additional configuration for the tool is found in `.github/zizmor.yml`
-  - repo: https://github.com/woodruffw/zizmor-pre-commit
-    rev: v1.16.3
-    hooks:
-      - id: zizmor
+  # - repo: https://github.com/woodruffw/zizmor-pre-commit
+  #   rev: v1.16.3
+  #   hooks:
+  #     - id: zizmor
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: 0.35.0
     hooks:

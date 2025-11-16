@@ -383,7 +383,7 @@ class ImageAnalyseResult:
         def format_line(
             keys,
             values,
-            # 1 sign, 1 decimal, 3 percision, 1-3 leading?
+            # 1 sign, 1 decimal, 3 precision, 1-3 leading?
             width=8,
             precision=3,
         ):
@@ -629,7 +629,7 @@ def __handle_torch_image(image, normalise, is_grayscale, is_batched, target_size
 def cumulative_sum_starts_at(my_list):
     """
     Given [7, 5, 2, 9]
-    retruns [0, 7, 12, 14]
+    returns [0, 7, 12, 14]
     """
     result = [0 for _ in range(len(my_list))]
     for i in range(len(my_list) - 1):

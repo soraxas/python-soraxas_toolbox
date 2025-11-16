@@ -27,7 +27,7 @@ class PerformanceLogger:
 
     @staticmethod
     def write_dict_file(dictionary: dict, output_filename: str):
-        """Given a dict file, wrtie the contents into a file."""
+        """Given a dict file, write the contents into a file."""
         with open(output_filename, "w") as outfile:
             for key, val in dictionary.items():
                 outfile.write("{} : {}\n".format(key, val))

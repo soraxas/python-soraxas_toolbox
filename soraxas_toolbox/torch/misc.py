@@ -20,7 +20,7 @@ def get_clean_npimg(x, auto_reorder_dim=True):
     x_type = type(x)
     SUPPORTED_TYPE = [torch.Tensor, np.ndarray]
     if x_type not in SUPPORTED_TYPE:
-        print("WARN: img is an unsupported tpye: {}.".format(x_type))
+        print("WARN: img is an unsupported type: {}.".format(x_type))
         return None
     if x_type == torch.Tensor:
         tensor_x = torch.Tensor.cpu(x).clone().detach()
@@ -54,7 +54,7 @@ def get_clean_npimg(x, auto_reorder_dim=True):
                 )
                 x = np.transpose(x, (1, 2, 0))
             elif x.shape[2] not in acceptable_channel_num and x_type == torch.Tensor:
-                # this assume the Tensor convension channel ordering.
+                # this assume the Tensor conversion channel ordering.
                 print(
                     "> Possible wrong channel order detected. "
                     "Reordering dimension based on Tensor NCHW convention."
