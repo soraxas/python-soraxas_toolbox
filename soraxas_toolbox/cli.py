@@ -1,16 +1,16 @@
-import typer
-
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import lazy_import_plus
+import typer
+
 import soraxas_toolbox as st
 
 if TYPE_CHECKING:
-    import PIL.Image
-    import numpy as np
-    import matplotlib.pyplot as plt
     import loguru
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import PIL.Image
 else:
     PIL = lazy_import_plus.lazy_module("PIL.Image", level="base")
     np = lazy_import_plus.lazy_module("numpy")

@@ -19,21 +19,25 @@ repos:
       - id: detect-private-key
       # - id: no-commit-to-branch
       - id: check-executables-have-shebangs
-  - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.9.9
-    hooks:
-      - id: uv-lock
-  - repo: https://github.com/charliermarsh/ruff-pre-commit
+  # - repo: https://github.com/astral-sh/uv-pre-commit
+  #   rev: 0.9.9
+  #   hooks:
+  #     - id: uv-lock
+  - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.5
     hooks:
-      # - id: ruff
-      #   args:
-      #     - --fix
+      # ruff lint should be run before format or other hooks like isort
+      - id: ruff-check
+        args: [--fix]
       - id: ruff-format
   - repo: https://github.com/abravalheri/validate-pyproject
     rev: v0.24.1
     hooks:
       - id: validate-pyproject
+  - repo: https://github.com/pycqa/isort
+    rev: 7.0.0
+    hooks:
+      - id: isort
 
   - repo: https://github.com/crate-ci/typos
     rev: v1.39.2

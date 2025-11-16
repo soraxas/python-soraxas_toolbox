@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import sys
 import abc
 import contextlib
+import sys
 
 import lazy_import_plus
 

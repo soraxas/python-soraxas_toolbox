@@ -1,8 +1,7 @@
 from typing import TYPE_CHECKING
 
-import torch
 import lazy_import_plus
-
+import torch
 
 if TYPE_CHECKING:
     import matplotlib.pyplot as plt

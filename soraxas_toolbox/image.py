@@ -1,40 +1,52 @@
 from __future__ import annotations
-# the future annotation allows type hinting for modules that does not exists
-# pyright: reportPrivateImportUsage=false
-# pyright: reportAssignmentType=false
 
-import os
 import math
+import os
 import warnings
-
-from shutil import which
-from subprocess import Popen, PIPE
 from abc import ABC
 from dataclasses import dataclass
-from typing import Literal, Sequence, TypeVar, cast
-from typing import IO, Callable, Optional, Tuple, Union, List, Any, TYPE_CHECKING
+from shutil import which
+from subprocess import PIPE, Popen
+from typing import (
+    IO,
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    List,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+    cast,
+)
 
 import lazy_import_plus
 import pip_ensure_version
 
-from . import utils
-from . import easy_with_blocks, notebook
+from . import easy_with_blocks, notebook, utils
 from ._lazy_import_workaround import MatplotlibTorchImportWorkaround
+
+# the future annotation allows type hinting for modules that does not exists
+# pyright: reportPrivateImportUsage=false
+# pyright: reportAssignmentType=false
 
 
 DisplayBackendT = Literal["auto", "timg", "term_image"]
 
 if TYPE_CHECKING:
-    import PIL.Image
-    import numpy as np
-    import tqdm
-    import matplotlib.pyplot as plt
+    import io
+    import numbers
+    import re
+
     import matplotlib as mpl
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import PIL.Image
     import torch
     import torchvision
-    import re
-    import numbers
-    import io
+    import tqdm
 else:
     PIL = lazy_import_plus.lazy_module("PIL.Image", level="base")
     np = lazy_import_plus.lazy_module("numpy")
@@ -821,9 +833,9 @@ def display(
 def view_high_dimensional_embeddings(
     x: np.ndarray, label=None, title="High-d embeddings"
 ):
-    from sklearn.manifold import TSNE
-    import seaborn as sns
     import pandas as pd
+    import seaborn as sns
+    from sklearn.manifold import TSNE
 
     if label is not None:
         assert len(label) == x.shape[0], f"{len(label)} != {x.shape}"

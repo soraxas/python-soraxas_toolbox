@@ -1,10 +1,10 @@
 from __future__ import annotations
-# pyright: reportPrivateImportUsage=false
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+# pyright: reportPrivateImportUsage=false
 
 
 class MatrixPlotter:

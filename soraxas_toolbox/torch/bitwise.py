@@ -1,9 +1,8 @@
 import functools
+from math import log2
+from typing import List
 
 import torch
-from math import log2
-
-from typing import List
 
 MAX_BITWISE_SHIFT = 63
 

@@ -1,9 +1,7 @@
-import torch
-
-import lazy_import_plus
-
 from typing import TYPE_CHECKING
 
+import lazy_import_plus
+import torch
 
 if TYPE_CHECKING:
     import einops

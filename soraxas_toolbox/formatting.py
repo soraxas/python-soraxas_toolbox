@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import datetime
 import os
-
 from pathlib import Path
-from typing import Union, Callable
+from typing import Callable, Union
 
 
 def convert_time_to_factor_and_unit(elapsed: float, fix_width=True):

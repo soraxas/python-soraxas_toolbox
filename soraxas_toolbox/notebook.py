@@ -1,4 +1,4 @@
-from typing import Union, Iterable
+from typing import Iterable, Union
 
 from . import easy_with_blocks
 

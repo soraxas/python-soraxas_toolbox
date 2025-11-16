@@ -2,7 +2,7 @@ import contextlib
 import csv
 import os
 from pathlib import Path
-from typing import List, Dict
+from typing import Dict, List
 
 from .utils import ContextManager
 
