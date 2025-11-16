@@ -1,3 +1,7 @@
+ci:
+  # pre-commit.ci has no network access, so we need to skip these hooks
+  skip: [uv-sync, ty-check]
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -22,7 +26,7 @@ repos:
   # - repo: https://github.com/astral-sh/uv-pre-commit
   #   rev: 0.9.9
   #   hooks:
-  #     - id: uv-lock
+  #     # - id: uv-lock
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.5
     hooks:
@@ -82,13 +86,12 @@ repos:
           - "github.com/wasilibs/go-shellcheck/cmd/shellcheck@v0.10.0"
 
   # run type check with ty
-  - repo: local
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.9.9
     hooks:
       - id: uv-sync
-        name: uv-sync
-        language: python
-        entry: uv sync --group typecheck-lite --group typecheck-all
-        pass_filenames: false
+        args: ["--group", "typecheck-lite", "--group", "typecheck-all"]
+        stages: [] # make this hook runs in all stages
   - repo: local
     hooks:
       - id: ty-check
