@@ -83,7 +83,7 @@ def has_common_bitset(
     b: torch.LongTensor,
     discard_bit_zero: bool = True,
 ) -> torch.BoolTensor:
-    """Return a boolean mask depending on whether the two tensor has commont bit set.
+    """Return a boolean mask depending on whether the two tensor has common bit set.
 
     >>> has_common_bitset(torch.LongTensor([0, 1<<2]), torch.LongTensor([0, 1<<3])).tolist()
     [False, False]
