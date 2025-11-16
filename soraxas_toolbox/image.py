@@ -272,7 +272,7 @@ def ensure_is_pillow(img) -> PIL.Image.Image:
         raise NotImplementedError(f"unknown type: {type(img)}")
 
 
-T = TypeVar("T", np.ndarray, PIL.Image.Image)
+T = TypeVar("T", np.ndarray, "PIL.Image.Image")
 
 
 def resize(
@@ -643,9 +643,9 @@ def __to_pil_image(
 
 SupportedImageType = Union[
     np.ndarray,
-    PIL.Image.Image,
+    "PIL.Image.Image",
     "torch.Tensor",
-    plt.Figure,
+    "plt.Figure",
     "pydot.Dot",
 ]
 
@@ -774,7 +774,7 @@ def view_high_dimensional_embeddings(
     plt.clf()
 
 
-def dot_to_image(dot_graph: "pydot.Dot") -> PIL.Image.Image:
+def dot_to_image(dot_graph: "pydot.Dot") -> "PIL.Image.Image":
     # render the `pydot` by calling `dot`, no file saved to disk
     png_str = dot_graph.create_png(prog="dot")
     # treat the DOT output as an image file
