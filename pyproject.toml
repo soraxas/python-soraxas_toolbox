@@ -38,15 +38,17 @@ st = "soraxas_toolbox.cli:main"
 
 [dependency-groups]
 # development dependency groups
-extra = [
+extra-lite = [
     "matplotlib",
     "numpy",
-    "opencv-python>=4.11.0.86",
     "pillow",
+    "tqdm",
     "term-image>=0.7.2",
+]
+extra-all = [
+    "opencv-python>=4.11.0.86",
     "torch",
     "torchvision",
-    "tqdm",
 ]
 
 [tool.isort]
