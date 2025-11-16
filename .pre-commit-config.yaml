@@ -1,9 +1,78 @@
 repos:
--   repo: https://github.com/ambv/black
-    rev: stable
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
     hooks:
-    - id: black
-#-   repo: https://gitlab.com/pycqa/flake8
-#    rev: 3.7.9
-#    hooks:
-#    - id: flake8
+      - id: trailing-whitespace
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: fix-byte-order-marker
+      - id: check-json
+      - id: check-toml
+      - id: sort-simple-yaml
+      - id: check-yaml
+        args:
+          - --unsafe
+      - id: check-xml
+      - id: mixed-line-ending
+      - id: check-symlinks
+      - id: check-merge-conflict
+      - id: detect-private-key
+      # - id: no-commit-to-branch
+      - id: check-executables-have-shebangs
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 0.9.9
+    hooks:
+      - id: uv-lock
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.14.5
+    hooks:
+      # - id: ruff
+      #   args:
+      #     - --fix
+      - id: ruff-format
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.24.1
+    hooks:
+      - id: validate-pyproject
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.39.2
+    hooks:
+      - id: typos
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.6.2
+    hooks:
+      - id: prettier
+  # zizmor detects security vulnerabilities in GitHub Actions workflows.
+  # Additional configuration for the tool is found in `.github/zizmor.yml`
+  - repo: https://github.com/woodruffw/zizmor-pre-commit
+    rev: v1.16.3
+    hooks:
+      - id: zizmor
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.35.0
+    hooks:
+      - id: check-github-workflows
+  # `actionlint` hook, for verifying correct syntax in GitHub Actions workflows.
+  # Some additional configuration for `actionlint` can be found in `.github/actionlint.yaml`.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.8
+    hooks:
+      - id: actionlint
+        stages:
+          # This hook is disabled by default, since it's quite slow.
+          # To run all hooks *including* this hook, use `uvx pre-commit run -a --hook-stage=manual`.
+          # To run *just* this hook, use `uvx pre-commit run -a actionlint --hook-stage=manual`.
+          - manual
+        args:
+          - "-ignore=SC2129" # ignorable stylistic lint from shellcheck
+          - "-ignore=SC2016" # another shellcheck lint: seems to have false positives?
+        additional_dependencies:
+          # actionlint has a shellcheck integration which extracts shell scripts in `run:` steps from GitHub Actions
+          # and checks these with shellcheck. This is arguably its most useful feature,
+          # but the integration only works if shellcheck is installed
+          - "github.com/wasilibs/go-shellcheck/cmd/shellcheck@v0.10.0"
