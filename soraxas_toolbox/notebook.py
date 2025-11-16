@@ -8,7 +8,7 @@ with easy_with_blocks.NoMissingModuleError(strong_warning=False):
 
 def is_notebook() -> bool:
     try:
-        shell = get_ipython().__class__.__name__
+        shell = get_ipython().__class__.__name__  # type: ignore[attr-defined]
         if shell == "ZMQInteractiveShell":
             return True  # Jupyter notebook or qtconsole
         elif shell == "TerminalInteractiveShell":

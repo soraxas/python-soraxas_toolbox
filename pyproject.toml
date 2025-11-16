@@ -38,21 +38,29 @@ st = "soraxas_toolbox.cli:main"
 
 [dependency-groups]
 # development dependency groups
-extra-lite = [
+typecheck-lite = [
     "matplotlib",
     "numpy",
     "pandas",
     "pillow",
     "tqdm",
     "pydot",
+    "loguru",
+    "typer",
     "term-image>=0.7.2",
 ]
-extra-all = [
+typecheck-all = [
     "opencv-python>=4.11.0.86",
     "torch",
+    "einops",
+    "tensorboardX",
     "torchvision",
     "scikit-learn",
     "seaborn",
+    "IPython",
+]
+dev = [
+    "pytest>=7.4.4",
 ]
 
 [tool.isort]

@@ -36,17 +36,15 @@ class PerformanceLogger:
 class Timer:
     def __init__(self):
         self.all_stamps = {}
-        self._last_stamp_str = None
-        self._last_stamp_time = None
+        self._last_stamp: tuple[str, float] | None = None
 
     def stamp(self, stamped_str: str):
-        if self._last_stamp_str is not None:
-            key = (self._last_stamp_str, stamped_str)
+        if self._last_stamp is not None:
+            key = (self._last_stamp[0], stamped_str)
             if key not in self.all_stamps:
                 self.all_stamps[key] = []
-            self.all_stamps[key].append(time.time() - self._last_stamp_time)
-        self._last_stamp_str = stamped_str
-        self._last_stamp_time = time.time()
+            self.all_stamps[key].append(time.time() - self._last_stamp[1])
+        self._last_stamp = (stamped_str, time.time())
 
     def print_stats(self, print_title: bool = True):
         string_1_max_len = 0

@@ -1,6 +1,6 @@
 import functools
 from math import log2
-from typing import List
+from typing import List, cast
 
 import torch
 
@@ -70,10 +70,13 @@ def bitwise_or_reduce(x: torch.LongTensor, dim: int) -> torch.LongTensor:
 
     ######################
 
-    return functools.reduce(
-        lambda bit_mask, i: torch.bitwise_or(bit_mask, x[get_indices(i)]),
-        range(1, x.shape[dim]),
-        x[get_indices(0)],  # initializer
+    return cast(
+        torch.LongTensor,
+        functools.reduce(
+            lambda bit_mask, i: torch.bitwise_or(bit_mask, x[get_indices(i)]),
+            range(1, x.shape[dim]),
+            x[get_indices(0)],  # initializer
+        ),
     )
 
 
@@ -93,9 +96,9 @@ def has_common_bitset(
     """
     if discard_bit_zero:
         # all common bit should be greater than zero
-        return torch.bitwise_and(a, b) > 0
+        return cast(torch.BoolTensor, torch.bitwise_and(a, b) > 0)
     else:
-        return torch.bitwise_and(a, b) == a
+        return cast(torch.BoolTensor, torch.bitwise_and(a, b) == a)
 
 
 def build_combined_bitmask(
@@ -143,6 +146,7 @@ def build_combined_bitmask(
     # if a class is zero, its bit-shifted will have value 1
     if remove_class_zero:
         shifted_bits[shifted_bits == 1] = 0
+    shifted_bits = cast(torch.LongTensor, shifted_bits)
     return bitwise_or_reduce(shifted_bits, dim=dim)
 
 

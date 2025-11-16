@@ -112,7 +112,7 @@ def pairwise_mask_subpatch_cross_matching(
         einops.rearrange(blocks_of_mask1, "... h w -> ... (h w)"), dim=-1
     )
 
-    cross_compare = bitwise.has_common_bitset(m1[..., :, None], m2[..., None, :])
+    cross_compare = bitwise.has_common_bitset(m1[..., :, None], m2[..., None, :])  # type: ignore[arg-type] (they are indeed long, but the indexing mess up the type checker)
     return cross_compare
 
 

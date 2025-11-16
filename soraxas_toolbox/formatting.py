@@ -6,7 +6,9 @@ from pathlib import Path
 from typing import Callable, Union
 
 
-def convert_time_to_factor_and_unit(elapsed: float, fix_width=True):
+def convert_time_to_factor_and_unit(
+    elapsed: float, fix_width=True
+) -> tuple[float, str]:
     if elapsed < 1e-6:
         factor = 1e9
         unit = "ns"
@@ -33,8 +35,8 @@ def format_time2readable(elapsed, precision=3, decimal_place=2, width=6):
     try:
         iter(elapsed)
         # is list-type
-        _mean = np.mean(elapsed)
-        _std = np.std(elapsed)
+        _mean = np.mean(elapsed).item()
+        _std = np.std(elapsed).item()
         factor_and_unit = convert_time_to_factor_and_unit(_mean, True)
         return (
             f"{_mean * factor_and_unit[0]:{_f()}}"

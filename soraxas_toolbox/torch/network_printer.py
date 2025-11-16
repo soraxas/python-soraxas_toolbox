@@ -35,13 +35,13 @@ class TorchNetworkPrinter(object):
         You can ignore printing certain module by putting a list of names (string) in the args ignore_modules
         """
         try:
-            torch.nn.Module.__patched
+            torch.nn.Module.__patched  # type: ignore[attr-defined]
             # if exists.
             print("WARN: Another TorchNetworkPrinter already exists!")
             print("      Trying to clean up previous instance.")
             print("      Use with caution.")
             print()
-            torch.nn.Module.__patched.cleanup()
+            torch.nn.Module.__patched.cleanup()  # type: ignore[attr-defined]
         except AttributeError:
             pass
         self._ori_nn_module_init = None
@@ -85,7 +85,7 @@ class TorchNetworkPrinter(object):
         if self._ori_nn_module_init is None:
             self._ori_nn_module_init = torch.nn.Module.__init__
         torch.nn.Module.__init__ = self.create_wrapper(torch.nn.Module.__init__)
-        torch.nn.Module.__patched = self
+        torch.nn.Module.__patched = self  # type: ignore[attr-defined]
 
     def unpatch(self):
         """Restore the original module __init__."""
@@ -93,8 +93,8 @@ class TorchNetworkPrinter(object):
             print("WARN: No stored nn.Module.__init__")
             print("      The module is never patched?")
         else:
-            torch.nn.Module.__init__ = self._ori_nn_module_init
-            del torch.nn.Module.__patched
+            torch.nn.Module.__init__ = self._ori_nn_module_init  # type: ignore[attr-defined]
+            del torch.nn.Module.__patched  # type: ignore[attr-defined]
             self._ori_nn_module_init = None
 
     def print_stack_depth(self, _depth, offset=0, symbol="|"):

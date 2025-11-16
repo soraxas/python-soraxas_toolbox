@@ -16,7 +16,7 @@ class _RepeatSampler(object):
             yield from iter(self.sampler)
 
 
-class FastDataLoader(torch.utils.data.dataloader.DataLoader):
+class FastDataLoader(torch.utils.data.DataLoader):
     """From https://github.com/pytorch/pytorch/issues/15849#issuecomment-573921048.
     This reuse worker process, which is extremely beneficial to short epoch, as it
     does not need to re-spawn threads from num_workers>0 every epoch."""
@@ -27,7 +27,7 @@ class FastDataLoader(torch.utils.data.dataloader.DataLoader):
         self.iterator = super().__iter__()
 
     def __len__(self):
-        return len(self.batch_sampler.sampler)
+        return len(self.batch_sampler.sampler)  # type: ignore[attr-defined]
 
     def __iter__(self):
         for i in range(len(self)):
@@ -42,7 +42,7 @@ class CachedDataset(object):
         If cache_across_multiprocess is set to `True`, it will try to use
             multiprocessing.Manager's shared dict to share the cache.
         """
-        if not isinstance(dataset, torch.utils.data.dataset.Dataset):
+        if not isinstance(dataset, torch.utils.data.Dataset):
             raise ValueError(f"Unknown type {type(dataset)}")
 
         # mock this as the input dataset

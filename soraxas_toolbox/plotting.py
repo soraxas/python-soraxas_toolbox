@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colorbar import Colorbar
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 # pyright: reportPrivateImportUsage=false
@@ -17,7 +18,7 @@ class MatrixPlotter:
         self.fig = plt.figure()
         # ax = self.fig.add_subplot(111)
         self.ax = self.fig.add_subplot(111)
-        self.colorbar = None
+        self.colorbar: Colorbar | None = None
 
     def update(self, data: np.ndarray, normalise: bool = False, block: bool = False):
         _data = data / data.sum() if normalise else data
@@ -26,7 +27,7 @@ class MatrixPlotter:
         if self.colorbar is None:
             self.colorbar = self.fig.colorbar(cax)
         else:
-            self.colorbar.update_bruteforce(cax)
+            self.colorbar.update_bruteforce(cax)  # type: ignore[attr-defined]
         plt.draw()
         plt.pause(0.00001)
         if block:

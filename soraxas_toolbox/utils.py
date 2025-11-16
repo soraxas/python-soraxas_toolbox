@@ -49,7 +49,8 @@ class ContextManager(metaclass=abc.ABCMeta):
     """
 
     def __init__(self):
-        self.__cm = None
+        # the following should always be non-none due to the abstract method marker
+        self.__cm: contextlib.AbstractContextManager = None  # type: ignore[assignment]
 
     @abc.abstractmethod
     @contextlib.contextmanager
