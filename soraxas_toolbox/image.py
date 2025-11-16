@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     import matplotlib.pyplot as plt
     import numpy as np
     import PIL.Image
+    import pydot
     import torch
     import torchvision
     import tqdm
@@ -52,6 +53,7 @@ else:
     PIL = lazy_import_plus.lazy_module("PIL.Image", level="base")
     np = lazy_import_plus.lazy_module("numpy")
     tqdm = lazy_import_plus.lazy_module("tqdm")
+    pydot = lazy_import_plus.lazy_module("pydot")
     plt = lazy_import_plus.lazy_module("matplotlib.pyplot")
     mpl = lazy_import_plus.lazy_module("matplotlib")
     torch = lazy_import_plus.lazy_module(
@@ -639,9 +641,45 @@ def __to_pil_image(
     return image
 
 
+SupportedImageType = Union[
+    np.ndarray,
+    PIL.Image.Image,
+    "torch.Tensor",
+    plt.Figure,
+    "pydot.Dot",
+]
+
+
+def _display_preflight_check(
+    image: SupportedImageType,
+    normalise: bool | None = None,
+):
+    # if we are normalising, we need to convert the image to float32
+    if normalise:
+        if utils.module_was_imported("torch"):
+            if isinstance(image, torch.Tensor):
+                image = image.cpu().numpy()
+        if isinstance(image, PIL.Image.Image):
+            image = np.array(image)
+        if isinstance(image, np.ndarray):
+            image = image.astype(np.float32)
+        return image
+
+    if utils.module_was_imported("matplotlib") and isinstance(image, plt.Figure):
+        # no need to do anything else, but will raise an error if there are more images
+        return image
+    if utils.module_was_imported("torch") and isinstance(image, torch.Tensor):
+        return image
+    if utils.module_was_imported("numpy") and isinstance(image, np.ndarray):
+        return image
+    if utils.module_was_imported("pydot") and isinstance(image, pydot.Dot):
+        return dot_to_image(image)
+    raise ValueError(f"Unsupported type {type(image)}")
+
+
 def display(
-    image: Union[np.ndarray, PIL.Image.Image, "torch.Tensor", plt.Figure],
-    *more_images,
+    image: SupportedImageType,
+    *more_images: SupportedImageType,
     max_cols: int | None = None,
     target_size: Tuple[int, int] | None = None,
     pbar: tqdm.tqdm | None = None,
@@ -652,29 +690,29 @@ def display(
     is_grayscale: Optional[bool] = None,
     backend: DisplayBackendT = "auto",
 ) -> None:
-    # if we are normalising, we need to convert the image to float32
-    if normalise:
-        if utils.module_was_imported("torch"):
-            if isinstance(image, torch.Tensor):
-                image = image.cpu().numpy()
-        if isinstance(image, PIL.Image.Image):
-            image = np.array(image)
-        if isinstance(image, np.ndarray):
-            image = image.astype(np.float32)
-
+    images = list(
+        map(
+            lambda x: _display_preflight_check(x, normalise=normalise),
+            (image, *more_images),
+        )
+    )
     if utils.module_was_imported("matplotlib"):
-        if isinstance(image, plt.Figure):
-            if len(more_images) > 0:
-                raise NotImplementedError("matplotlib does not support multi image")
+        if len(images) > 1 and any(isinstance(x, plt.Figure) for x in images):
+            raise NotImplementedError("matplotlib does not support multi image")
 
-            return __send_to_display(
-                displayable_image=DisplayableImage(
-                    stream_save_functor=lambda stream: image.savefig(stream),
-                    stream_format=format,
-                ),
-                pbar=pbar,
-                backend=backend,
-            )
+    # early return for matplotlib figure
+    if isinstance(images[0], plt.Figure):
+        if len(more_images) > 0:
+            raise NotImplementedError("matplotlib does not support multi image")
+
+        return __send_to_display(
+            displayable_image=DisplayableImage(
+                stream_save_functor=lambda stream: images[0].savefig(stream),
+                stream_format=format,
+            ),
+            pbar=pbar,
+            backend=backend,
+        )
 
     #####################################################
     # for list of nparray or tensor
@@ -687,24 +725,22 @@ def display(
             is_batched=is_batched,
             is_grayscale=is_grayscale,
         )
-        for im in (image, *more_images)
+        for im in images
     ]
-    image = concat_images(
+    output_image = concat_images(
         all_pil_images,
         max_cols=max_cols,
     )
 
     # if image is in 16bit, convert it to 8bit
-    if image.mode == "I;16":
-        image = make_displayable_image(image)
+    if output_image.mode == "I;16":
+        output_image = make_displayable_image(output_image)
 
     return __send_to_display(
-        displayable_image=DisplayableImage(pil_image=image),
+        displayable_image=DisplayableImage(pil_image=output_image),
         pbar=pbar,
         backend=backend,
     )
-
-    raise ValueError(f"Unknown format of type {type(image)} with input {image}")
 
 
 def view_high_dimensional_embeddings(
@@ -736,3 +772,14 @@ def view_high_dimensional_embeddings(
 
     display(plt.gcf())
     plt.clf()
+
+
+def dot_to_image(dot_graph: "pydot.Dot") -> PIL.Image.Image:
+    # render the `pydot` by calling `dot`, no file saved to disk
+    png_str = dot_graph.create_png(prog="dot")
+    # treat the DOT output as an image file
+    sio = io.BytesIO()
+    sio.write(png_str)
+    sio.seek(0)
+    img = mpl.image.imread(sio)
+    return img

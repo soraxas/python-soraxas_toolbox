@@ -43,6 +43,7 @@ extra-lite = [
     "numpy",
     "pillow",
     "tqdm",
+    "pydot",
     "term-image>=0.7.2",
 ]
 extra-all = [
