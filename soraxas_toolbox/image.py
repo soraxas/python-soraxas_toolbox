@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     import matplotlib.pyplot as plt
     import numpy as np
     import PIL.Image
-    import pydot
+    import pydot.core
     import torch
     import torchvision
     import tqdm
@@ -96,10 +96,10 @@ def plt_fig_to_nparray(fig: plt.Figure) -> np.ndarray:
 
     # Convert the figure to numpy array, read the pixel values and reshape the array
     if hasattr(fig.canvas, "tostring_rgb"):
-        _img_str = fig.canvas.tostring_rgb()
+        _img_str = fig.canvas.tostring_rgb()  # type: ignore[attr-defined]
         n_channel = 3
     elif hasattr(fig.canvas, "tostring_argb"):
-        _img_str = fig.canvas.tostring_argb()
+        _img_str = fig.canvas.tostring_argb()  # type: ignore[attr-defined]
         n_channel = 4
     else:
         raise NotImplementedError(f"{fig.canvas}")
@@ -181,10 +181,10 @@ class DisplayableImage:
         Turn the image into stream if it is not already.
         """
         if self.mode == "pil":
-            return lambda stream: self.__pil_image.save(
-                stream, format=self.__stream_format
-            )
+            __pil_image: PIL.Image.Image = cast(PIL.Image.Image, self.__pil_image)
+            return lambda stream: __pil_image.save(stream, format=self.__stream_format)
         elif self.mode == "stream":
+            assert self.__stream_save_functor is not None
             return self.__stream_save_functor
         raise ValueError(f"Unknown mode {self.mode}")
 
@@ -210,7 +210,7 @@ def __send_to_display(
     pbar: tqdm.tqdm | None = None,
 ):
     if notebook.is_notebook():
-        import IPython.display
+        import IPython.display  # type: ignore[import-untyped]
 
         if backend != "auto":
             raise ValueError(f"Cannot use backend '{backend}' in notebook")
@@ -282,14 +282,18 @@ def resize(
     target_size: Union[Sequence[int], float, int],
     backend: Literal["pillow", "cv2"] = "pillow",
 ) -> T:
-    # pyright: ignore[reportAssignmentType]
+    image: Union[np.ndarray, PIL.Image.Image] = cast(
+        Union[np.ndarray, PIL.Image.Image], image
+    )
 
     _original_type: Literal["array", "pillow"] | None = None
     if isinstance(image, np.ndarray):
         _original_type = "array"
+        image = cast(np.ndarray, image)
         new_shape = get_new_shape_maintain_ratio(target_size, image.shape[:2])
     elif isinstance(image, PIL.Image):
         _original_type = "pillow"
+        image = cast(PIL.Image.Image, image)
         new_shape = get_new_shape_maintain_ratio(target_size, image.size)
     else:
         raise ValueError(f"Unsupported type: {_original_type}")
@@ -302,7 +306,7 @@ def resize(
                 "There seems to be some type error."
                 "Maybe opencv (with backend='cv2') would support your image format?"
             ) from e
-        image = image.resize(new_shape)
+        image = image.resize(new_shape)  # type: ignore[assignment]
     elif backend == "cv2":
         import cv2
 
@@ -310,9 +314,9 @@ def resize(
         image = cv2.resize(image, (new_shape[1], new_shape[0]))
 
     if _original_type == "array":
-        image = ensure_is_numpy(image)
+        image = ensure_is_numpy(image)  # type: ignore[assignment]
     elif _original_type == "pillow":
-        image = ensure_is_pillow(image)
+        image = ensure_is_pillow(image)  # type: ignore[assignment]
     return cast(T, image)
 
 
@@ -417,7 +421,7 @@ class ArrayAutoFixer(ABC):
         return x
 
     @classmethod
-    def fix_float_range(cls, image, normalise: bool):
+    def fix_float_range(cls, image, normalise: bool | None = None):
         # works for either numpy or torch
         _min = image.min()
         _max = image.max()
@@ -531,7 +535,7 @@ def cumulative_sum_starts_at(my_list):
 
 
 def concat_images(
-    images: List[PIL.Image.Image], max_cols: int = 0, boarder: int = 5
+    images: List[PIL.Image.Image], max_cols: int | None = 0, boarder: int = 5
 ) -> PIL.Image.Image:
     # no need to concat
     if len(images) <= 1:
@@ -578,12 +582,12 @@ def concat_images(
 
 
 def __to_pil_image(
-    image,
+    image: Union["np.ndarray", torch.Tensor, "PIL.Image.Image"],
     normalise: Optional[bool] = None,
     target_size: Tuple[int, int] | int | None = None,
     is_batched: Optional[bool] = None,
     is_grayscale: Optional[bool] = None,
-):
+) -> "PIL.Image.Image":
     if utils.module_was_imported("torch") and not utils.module_was_imported(
         "torchvision"
     ):
@@ -610,11 +614,12 @@ def __to_pil_image(
 
         # to uint8 if necessary
         image = NumpyArrayAutoFixer.fix_dtype(image)
-        image = PIL.Image.fromarray(ensure_uint8_image(image))
+        return PIL.Image.fromarray(ensure_uint8_image(image))
 
-        return image
+    # image would either be a torch tensor or a PIL image
+    image = cast(Union["torch.Tensor", PIL.Image.Image], image)
 
-    if utils.module_was_imported("torch") and isinstance(image, torch.Tensor):
+    if utils.module_was_imported("torchvision") and isinstance(image, torch.Tensor):
         TorchArrayAutoFixer.cls_var_setter(module=torch)
         with torch.no_grad():
             with easy_with_blocks.NoMissingModuleError(strong_warning=True):
@@ -637,6 +642,8 @@ def __to_pil_image(
                 )
                 # .add_(0.5)
                 return PIL.Image.fromarray(image)
+
+    image = cast("PIL.Image.Image", image)
 
     if target_size is not None:
         image = resize(image, target_size=target_size)
@@ -776,9 +783,9 @@ def view_high_dimensional_embeddings(
     plt.clf()
 
 
-def dot_to_image(dot_graph: "pydot.Dot") -> "PIL.Image.Image":
+def dot_to_image(dot_graph: "pydot.core.Dot") -> "np.ndarray":
     # render the `pydot` by calling `dot`, no file saved to disk
-    png_str = dot_graph.create_png(prog="dot")
+    png_str = dot_graph.create(prog="dot", format="png")
     # treat the DOT output as an image file
     sio = io.BytesIO()
     sio.write(png_str)

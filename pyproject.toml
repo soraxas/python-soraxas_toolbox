@@ -41,6 +41,7 @@ st = "soraxas_toolbox.cli:main"
 extra-lite = [
     "matplotlib",
     "numpy",
+    "pandas",
     "pillow",
     "tqdm",
     "pydot",
@@ -50,6 +51,8 @@ extra-all = [
     "opencv-python>=4.11.0.86",
     "torch",
     "torchvision",
+    "scikit-learn",
+    "seaborn",
 ]
 
 [tool.isort]

@@ -10,5 +10,8 @@ dot_string = """graph my_graph {
 }"""
 
 graphs = pydot.graph_from_dot_data(dot_string)
+print(type(graphs[0]))
+
+print(pydot.core.Dot)
 
 st.image.display(*graphs)
