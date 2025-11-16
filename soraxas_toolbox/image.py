@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     import re
 
     import matplotlib as mpl
+    import matplotlib.image as mpl_image
     import matplotlib.pyplot as plt
     import numpy as np
     import PIL.Image
@@ -56,6 +57,7 @@ else:
     pydot = lazy_import_plus.lazy_module("pydot")
     plt = lazy_import_plus.lazy_module("matplotlib.pyplot")
     mpl = lazy_import_plus.lazy_module("matplotlib")
+    mpl_image = lazy_import_plus.lazy_module("matplotlib.image")
     torch = lazy_import_plus.lazy_module(
         "torch", on_import=MatplotlibTorchImportWorkaround()
     )
@@ -781,5 +783,5 @@ def dot_to_image(dot_graph: "pydot.Dot") -> "PIL.Image.Image":
     sio = io.BytesIO()
     sio.write(png_str)
     sio.seek(0)
-    img = mpl.image.imread(sio)
+    img = mpl_image.imread(sio)
     return img
