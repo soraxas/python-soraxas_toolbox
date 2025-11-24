@@ -76,7 +76,7 @@ def read_as_array(path: str) -> np.ndarray:
     return np.array(PIL.Image.open(path))
 
 
-def plt_fig_to_nparray(fig: plt.Figure) -> np.ndarray:
+def plt_fig_to_nparray(fig: plt.Figure, normalize: bool = False) -> np.ndarray:
     """
     Takes a matplotlib figure handle and converts it using
     canvas and string-casts to a numpy array that can be
@@ -94,11 +94,13 @@ def plt_fig_to_nparray(fig: plt.Figure) -> np.ndarray:
     # Draw figure on canvas
     fig.canvas.draw()
 
+    is_argb = False
     # Convert the figure to numpy array, read the pixel values and reshape the array
     if hasattr(fig.canvas, "tostring_rgb"):
         _img_str = fig.canvas.tostring_rgb()  # type: ignore[attr-defined]
         n_channel = 3
     elif hasattr(fig.canvas, "tostring_argb"):
+        is_argb = True
         _img_str = fig.canvas.tostring_argb()  # type: ignore[attr-defined]
         n_channel = 4
     else:
@@ -106,8 +108,13 @@ def plt_fig_to_nparray(fig: plt.Figure) -> np.ndarray:
     img = np.fromstring(_img_str, dtype=np.uint8, sep="")
     img = img.reshape(fig.canvas.get_width_height()[::-1] + (n_channel,))
 
-    # Normalize into 0-1 range for TensorBoard(X). Swap axes for newer versions where API expects colors in first dim
-    img = img / 255.0
+    if is_argb:
+        # need to reorder from argb to rgba. Use fancy indexing
+        img = img[..., [1, 2, 3, 0]]
+
+    if normalize:
+        # Normalize into 0-1 range for TensorBoard(X). Swap axes for newer versions where API expects colors in first dim
+        img = img / 255.0
     # img = np.swapaxes(img, 0, 2) # if your TensorFlow + TensorBoard version are >= 1.8
     plt.close(fig)
     return img
