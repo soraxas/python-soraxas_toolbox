@@ -681,6 +681,8 @@ def _display_preflight_check(
             image = image.astype(np.float32)
         return image
 
+    if isinstance(image, PIL.Image.Image):
+        return image
     if utils.module_was_imported("matplotlib") and isinstance(image, plt.Figure):
         # no need to do anything else, but will raise an error if there are more images
         return image
