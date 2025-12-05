@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 import lazy_import_plus
 import typer
@@ -55,13 +55,42 @@ def histogram(
 @app.command()
 def display(
     image_path: Path,
-    normalise: bool = False,
-    clip_low: float | None = None,
-    clip_high: float | None = None,
-    display_backend: st.image.DisplayBackendT = "auto",
+    normalise: Annotated[
+        bool, typer.Option(help="Apply normalization image to 0-1 range.")
+    ] = False,
+    clip_low: Annotated[
+        float | None,
+        typer.Option(help="The low percentile to clip the image (0-100 range)."),
+    ] = None,
+    clip_high: Annotated[
+        float | None,
+        typer.Option(help="The high percentile to clip the image (0-100 range)."),
+    ] = None,
+    display_backend: Annotated[
+        st.image.DisplayBackendT,
+        typer.Option(help="The backend to use for displaying the image."),
+    ] = "auto",
+    # cv2_op
+    cv2_ops: Annotated[
+        str | None,
+        typer.Option(
+            help=(
+                "Arbitrary cv2 operations to apply to the image before displaying it."
+                "e.g. `cv2.cvtColor(img, cv2.COLOR_BGR2RGB)`\n`cv2.cvtColor(img, cv2.COLOR_BayerBG2RGB)`"
+            )
+        ),
+    ] = None,
 ):
-    """Display the given image file."""
+    """
+    Display the given image file.
+    """
     img = PIL.Image.open(image_path)
+
+    if cv2_ops is not None:
+        import cv2
+
+        img = np.asarray(img)
+        img = eval(cv2_ops, {"cv2": cv2}, {"img": img})
 
     if clip_low is not None or clip_high is not None:
         # need to convert to numpy array first

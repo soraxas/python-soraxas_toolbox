@@ -29,6 +29,9 @@ cli = [
     "term-image",
     "loguru",
 ]
+cv2 = [
+    "opencv-python>=4.11.0.86",
+]
 
 [project.urls]
 Homepage = "https://github.com/soraxas/pytoolbox"
