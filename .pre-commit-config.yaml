@@ -28,7 +28,7 @@ repos:
   #   hooks:
   #     # - id: uv-lock
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.8
+    rev: v0.14.10
     hooks:
       # ruff lint should be run before format or other hooks like isort
       - id: ruff-check
@@ -44,7 +44,7 @@ repos:
       - id: isort
 
   - repo: https://github.com/crate-ci/typos
-    rev: v1
+    rev: typos-dict-v0.13.13
     hooks:
       - id: typos
   - repo: https://github.com/shellcheck-py/shellcheck-py
@@ -62,7 +62,7 @@ repos:
   #   hooks:
   #     - id: zizmor
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.35.0
+    rev: 0.36.0
     hooks:
       - id: check-github-workflows
   # `actionlint` hook, for verifying correct syntax in GitHub Actions workflows.
@@ -87,7 +87,7 @@ repos:
 
   # run type check with ty
   - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.9.16
+    rev: 0.9.18
     hooks:
       - id: uv-sync
         args: ["--group", "typecheck-lite", "--group", "typecheck-all"]
