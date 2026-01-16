@@ -64,6 +64,8 @@ typecheck-all = [
 ]
 dev = [
     "pytest>=7.4.4",
+    "coverage[toml]",
+    "pyrefly",
 ]
 
 [tool.isort]

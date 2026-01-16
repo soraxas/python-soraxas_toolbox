@@ -1,0 +1,192 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    # tags:
+    #   - "**"
+  pull_request: {}
+
+env:
+  COLUMNS: 150
+  UV_FROZEN: true
+  FORCE_COLOR: 1
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: 3.12
+          enable-cache: false
+
+      - name: Install dependencies
+        # Installing pip is required for the pre-commit action:
+        # not using --all-extras as graphiti is "part of" this repository, but its extra will pulls in deps like torch runtime
+        run: |
+          uv sync --all-packages #--group linting
+          uv pip install pip
+          uv tool install pyrefly
+      - uses: j178/prek-action@v1
+
+  test:
+    name: Test ${{ matrix.os }} / ${{ matrix.python-version }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest]
+        # os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.12"]
+        # python-version: ['3.12', '3.13', '3.14']
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: extractions/setup-just@v3
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: false
+
+      - name: Create Docker network for running Testcontainers
+        run: docker network create ${{ env.TESTCONTAINER_DOCKER_NETWORK }}
+
+      - name: Install dependencies
+        # not using --all-extras as graphiti is "part of" this repository, but its extra will pull in deps like torch runtime
+        run: uv sync --all-packages #--group testing-extra
+
+      - run: mkdir coverage
+      - name: Run pytest
+        run: just testcov
+        timeout-minutes: 4
+        env:
+          COVERAGE_FILE: coverage/.coverage.${{ runner.os }}-py${{ matrix.python-version }}
+          CONTEXT: ${{ runner.os }}-py${{ matrix.python-version }}-without-deps
+
+      - name: Store coverage files
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-${{ matrix.os }}-${{ matrix.python-version }}
+          path: coverage
+          include-hidden-files: true
+
+  # test-typechecking-integration:
+  #   name: Typechecking integration tests
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v6
+
+  #     - uses: astral-sh/setup-uv@v7
+  #       with:
+  #         python-version: '3.12'
+  #         enable-cache: true
+
+  #     - name: Install dependencies
+  #       run: uv sync --group typechecking
+
+  #     - name: Run typechecking integration tests (Pyright)
+  #       run: make test-typechecking-pyright
+
+  #     - name: Run typechecking integration tests (Mypy)
+  #       run: make test-typechecking-mypy
+
+  #     - name: Run typechecking integration tests (Pyrefly)
+  #       run: make test-typechecking-pyrefly
+
+  coverage-combine:
+    needs: [test]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Get coverage files
+        uses: actions/download-artifact@v7
+        with:
+          merge-multiple: true
+          pattern: coverage-*
+          path: coverage
+
+      - run: pip install coverage[toml]
+
+      - run: ls -la coverage
+      - run: coverage combine coverage
+      - run: coverage report
+      - run: coverage html --show-contexts --title "coverage for ${{ github.sha }}"
+
+      # add sonarscan
+      - run: coverage xml -o coverage/coverage.xml
+
+      - name: Upload results to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage/coverage.xml
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Store coverage data
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-data
+          path: .coverage
+          include-hidden-files: true
+
+      - name: Store coverage HTML
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-html
+          path: htmlcov
+
+  coverage-pr-comment:
+    needs: coverage-combine
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download coverage data
+        uses: actions/download-artifact@v7
+        with:
+          name: coverage-data
+
+      - name: Generate coverage comment
+        id: coverage-comment
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Store coverage comment
+        uses: actions/upload-artifact@v6
+        if: steps.coverage-comment.outputs.COMMENT_FILE_WRITTEN == 'true'
+        with:
+          name: python-coverage-comment-action
+          path: python-coverage-comment-action.txt

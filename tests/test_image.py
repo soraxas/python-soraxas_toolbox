@@ -1,6 +1,5 @@
 """Comprehensive unit tests for soraxas_toolbox.image module."""
 
-import importlib.util
 import io
 import warnings
 from unittest.mock import MagicMock, PropertyMock, patch
@@ -41,25 +40,32 @@ except ImportError:
     PIL_AVAILABLE = False
 
 try:
-    import torch  # type: ignore[import-untyped]
+    import torch  # noqa: F401
 
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
 
 try:
-    import matplotlib.pyplot as plt  # type: ignore[import-untyped]
+    import matplotlib.pyplot as plt  # noqa: F401
 
     MATPLOTLIB_AVAILABLE = True
 except ImportError:
     MATPLOTLIB_AVAILABLE = False
 
 try:
-    import pydot  # type: ignore[import-untyped]
+    import pydot  # noqa: F401
 
     PYDOT_AVAILABLE = True
 except ImportError:
     PYDOT_AVAILABLE = False
+
+
+def _torch_or_skip():
+    torch = pytest.importorskip("torch", reason="torch not installed")
+    if not hasattr(torch, "rand"):
+        pytest.skip("torch not available")
+    return torch
 
 
 # ============================================================================
@@ -79,6 +85,7 @@ def test_read_as_array(sample_image_path):
 @pytest.mark.requires_matplotlib
 def test_plt_fig_to_nparray_with_normalize():
     """Test plt_fig_to_nparray with normalize=True."""
+    plt = pytest.importorskip("matplotlib.pyplot", reason="matplotlib not installed")
     fig, ax = plt.subplots()
     ax.plot([1, 2, 3], [1, 2, 3])
     result = plt_fig_to_nparray(fig, normalize=True)
@@ -91,6 +98,7 @@ def test_plt_fig_to_nparray_with_normalize():
 @pytest.mark.requires_matplotlib
 def test_plt_fig_to_nparray_without_normalize():
     """Test plt_fig_to_nparray with normalize=False."""
+    plt = pytest.importorskip("matplotlib.pyplot", reason="matplotlib not installed")
     fig, ax = plt.subplots()
     ax.plot([1, 2, 3], [1, 2, 3])
     result = plt_fig_to_nparray(fig, normalize=False)
@@ -103,6 +111,7 @@ def test_plt_fig_to_nparray_without_normalize():
 @pytest.mark.requires_matplotlib
 def test_plt_fig_to_nparray_tostring_argb():
     """Test plt_fig_to_nparray with canvas that has tostring_argb."""
+    plt = pytest.importorskip("matplotlib.pyplot", reason="matplotlib not installed")
     fig, ax = plt.subplots()
     ax.plot([1, 2, 3], [1, 2, 3])
 
@@ -126,6 +135,7 @@ def test_plt_fig_to_nparray_tostring_argb():
 @pytest.mark.requires_matplotlib
 def test_plt_fig_to_nparray_unsupported_canvas():
     """Test plt_fig_to_nparray with unsupported canvas."""
+    plt = pytest.importorskip("matplotlib.pyplot", reason="matplotlib not installed")
     fig, ax = plt.subplots()
     ax.plot([1, 2, 3], [1, 2, 3])
 
@@ -614,6 +624,7 @@ def test_array_auto_fixer_fix_float_range_out_of_range():
 @pytest.mark.requires_torch
 def test_torch_array_auto_fixer_infer_is_batch_2d():
     """Test infer_is_batch with 2D tensor."""
+    torch = _torch_or_skip()
     x = torch.rand(10, 10)
     assert not TorchArrayAutoFixer.infer_is_batch(x)
 
@@ -621,6 +632,7 @@ def test_torch_array_auto_fixer_infer_is_batch_2d():
 @pytest.mark.requires_torch
 def test_torch_array_auto_fixer_infer_is_batch_3d_rgb():
     """Test infer_is_batch with 3D tensor (RGB)."""
+    torch = _torch_or_skip()
     x = torch.rand(3, 10, 10)
     assert not TorchArrayAutoFixer.infer_is_batch(x)
 
@@ -628,6 +640,7 @@ def test_torch_array_auto_fixer_infer_is_batch_3d_rgb():
 @pytest.mark.requires_torch
 def test_torch_array_auto_fixer_infer_is_batch_3d_grayscale():
     """Test infer_is_batch with 3D tensor (grayscale)."""
+    torch = _torch_or_skip()
     x = torch.rand(1, 10, 10)
     assert not TorchArrayAutoFixer.infer_is_batch(x)
 
@@ -635,6 +648,7 @@ def test_torch_array_auto_fixer_infer_is_batch_3d_grayscale():
 @pytest.mark.requires_torch
 def test_torch_array_auto_fixer_infer_is_batch_3d_batched():
     """Test infer_is_batch with 3D tensor (batched)."""
+    torch = _torch_or_skip()
     x = torch.rand(10, 10, 10)
     assert TorchArrayAutoFixer.infer_is_batch(x)
 
@@ -642,6 +656,7 @@ def test_torch_array_auto_fixer_infer_is_batch_3d_batched():
 @pytest.mark.requires_torch
 def test_torch_array_auto_fixer_infer_is_batch_4d():
     """Test infer_is_batch with 4D tensor."""
+    torch = _torch_or_skip()
     x = torch.rand(2, 3, 10, 10)
     assert TorchArrayAutoFixer.infer_is_batch(x)
 
@@ -649,6 +664,7 @@ def test_torch_array_auto_fixer_infer_is_batch_4d():
 @pytest.mark.requires_torch
 def test_torch_array_auto_fixer_infer_is_batch_5d():
     """Test infer_is_batch with 5D tensor."""
+    torch = _torch_or_skip()
     x = torch.rand(2, 10, 3, 5, 3)
     assert TorchArrayAutoFixer.infer_is_batch(x)
 
@@ -741,6 +757,7 @@ def test_display_preflight_check_pil(sample_pil_image):
 @pytest.mark.requires_matplotlib
 def test_display_preflight_check_matplotlib_figure():
     """Test _display_preflight_check with matplotlib figure."""
+    plt = pytest.importorskip("matplotlib.pyplot", reason="matplotlib not installed")
     fig, ax = plt.subplots()
     ax.plot([1, 2, 3], [1, 2, 3])
     result = _display_preflight_check(fig, normalise=False)
@@ -751,6 +768,7 @@ def test_display_preflight_check_matplotlib_figure():
 @pytest.mark.requires_torch
 def test_display_preflight_check_torch_tensor():
     """Test _display_preflight_check with torch tensor."""
+    torch = _torch_or_skip()
     x = torch.rand(3, 10, 10)
     result = _display_preflight_check(x, normalise=False)
     assert isinstance(result, torch.Tensor)
@@ -766,6 +784,7 @@ def test_display_preflight_check_numpy(sample_numpy_image):
 @pytest.mark.requires_pydot
 def test_display_preflight_check_pydot():
     """Test _display_preflight_check with pydot graph."""
+    pydot = pytest.importorskip("pydot", reason="pydot not installed")
     graph = pydot.Dot(graph_type="digraph")
     graph.add_node(pydot.Node("A"))
     graph.add_node(pydot.Node("B"))
@@ -804,6 +823,7 @@ def test_display_multiple_images():
 @pytest.mark.requires_matplotlib
 def test_display_matplotlib_figure():
     """Test display with matplotlib figure."""
+    plt = pytest.importorskip("matplotlib.pyplot", reason="matplotlib not installed")
     fig, ax = plt.subplots()
     ax.plot([1, 2, 3], [1, 2, 3])
     with patch("soraxas_toolbox.image.__send_to_display") as mock_display:
@@ -815,6 +835,7 @@ def test_display_matplotlib_figure():
 @pytest.mark.requires_matplotlib
 def test_display_multiple_with_figure():
     """Test display with multiple images including figure."""
+    plt = pytest.importorskip("matplotlib.pyplot", reason="matplotlib not installed")
     fig, ax = plt.subplots()
     ax.plot([1, 2, 3], [1, 2, 3])
     img = Image.new("RGB", (10, 10), color="red")
@@ -856,8 +877,7 @@ def test_display_with_normalise():
 @pytest.mark.slow
 def test_view_high_dimensional_embeddings():
     """Test view_high_dimensional_embeddings function."""
-    if importlib.util.find_spec("sklearn") is None:
-        pytest.skip("scikit-learn not available")
+    pytest.importorskip("sklearn", reason="scikit-learn not available")
     x = np.random.rand(20, 10)
     with patch("soraxas_toolbox.image.display") as mock_display:
         view_high_dimensional_embeddings(x)
@@ -867,8 +887,7 @@ def test_view_high_dimensional_embeddings():
 @pytest.mark.slow
 def test_view_high_dimensional_embeddings_with_labels():
     """Test view_high_dimensional_embeddings with labels."""
-    if importlib.util.find_spec("sklearn") is None:
-        pytest.skip("scikit-learn not available")
+    pytest.importorskip("sklearn", reason="scikit-learn not available")
     x = np.random.rand(20, 10)
     labels = np.random.randint(0, 3, 20)
     with patch("soraxas_toolbox.image.display") as mock_display:
@@ -879,8 +898,7 @@ def test_view_high_dimensional_embeddings_with_labels():
 @pytest.mark.slow
 def test_view_high_dimensional_embeddings_label_mismatch():
     """Test view_high_dimensional_embeddings with mismatched label length."""
-    if importlib.util.find_spec("sklearn") is None:
-        pytest.skip("scikit-learn not available")
+    pytest.importorskip("sklearn", reason="scikit-learn not available")
     x = np.random.rand(20, 10)
     labels = np.random.randint(0, 3, 15)  # Wrong length
     with pytest.raises(AssertionError):
@@ -894,6 +912,8 @@ def test_view_high_dimensional_embeddings_label_mismatch():
 @pytest.mark.requires_matplotlib
 def test_dot_to_image():
     """Test dot_to_image function."""
+    pytest.importorskip("matplotlib", reason="matplotlib not installed")
+    pydot = pytest.importorskip("pydot", reason="pydot not installed")
     graph = pydot.Dot(graph_type="digraph")
     graph.add_node(pydot.Node("A"))
     graph.add_node(pydot.Node("B"))
@@ -909,6 +929,7 @@ def test_dot_to_image():
 @pytest.mark.requires_torch
 def test_display_torch_tensor_uint8():
     """Test display with uint8 torch tensor."""
+    torch = _torch_or_skip()
     x = torch.randint(0, 255, (3, 10, 10), dtype=torch.uint8)
     with patch("soraxas_toolbox.image.__send_to_display") as mock_display:
         display(x)
@@ -918,6 +939,7 @@ def test_display_torch_tensor_uint8():
 @pytest.mark.requires_torch
 def test_display_torch_tensor_float():
     """Test display with float torch tensor."""
+    torch = _torch_or_skip()
     x = torch.rand(3, 10, 10)
     with patch("soraxas_toolbox.image.__send_to_display") as mock_display:
         display(x)
@@ -927,6 +949,7 @@ def test_display_torch_tensor_float():
 @pytest.mark.requires_torch
 def test_display_torch_tensor_batched():
     """Test display with batched torch tensor."""
+    torch = _torch_or_skip()
     x = torch.rand(2, 3, 10, 10)
     with patch("soraxas_toolbox.image.__send_to_display") as mock_display:
         display(x, is_batched=True)
@@ -936,6 +959,7 @@ def test_display_torch_tensor_batched():
 @pytest.mark.requires_torch
 def test_display_torch_tensor_grayscale():
     """Test display with grayscale torch tensor."""
+    torch = _torch_or_skip()
     x = torch.rand(10, 10)
     with patch("soraxas_toolbox.image.__send_to_display") as mock_display:
         display(x, is_grayscale=True)
@@ -945,6 +969,7 @@ def test_display_torch_tensor_grayscale():
 @pytest.mark.requires_torch
 def test_display_torch_tensor_with_target_size():
     """Test display with torch tensor and target_size."""
+    torch = _torch_or_skip()
     x = torch.rand(3, 100, 100)
     with patch("soraxas_toolbox.image.__send_to_display") as mock_display:
         display(x, target_size=50)
@@ -954,6 +979,7 @@ def test_display_torch_tensor_with_target_size():
 @pytest.mark.requires_torch
 def test_display_torch_tensor_batched_2d_warning():
     """Test display with batched 2D tensor (should warn)."""
+    torch = _torch_or_skip()
     x = torch.rand(10, 10)
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -1108,6 +1134,7 @@ def test_resize_pil_type_error():
 @pytest.mark.requires_torch
 def test_display_torch_without_torchvision():
     """Test display with torch tensor but no torchvision."""
+    torch = _torch_or_skip()
     x = torch.rand(3, 10, 10)
     with patch("soraxas_toolbox.image.utils.module_was_imported") as mock_imported:
 

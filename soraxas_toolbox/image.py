@@ -68,12 +68,24 @@ else:
     numbers = lazy_import_plus.lazy_module("numbers")
 
     io = lazy_import_plus.lazy_module("io")
-    ip_display: Any = lazy_import_plus.lazy_module("IPython.display")
+    ip_display: Any | None = None
     AutoImage: Any | None = None
 
 ############################################################
 ##             Turn any matplotlib plt to img             ##
 ############################################################
+
+
+def _get_torch_module() -> Any | None:
+    try:
+        module = import_module("torch")
+    except Exception:
+        return None
+    try:
+        _ = module.Tensor
+    except Exception:
+        return None
+    return module
 
 
 def read_as_array(path: str) -> np.ndarray:
@@ -258,7 +270,7 @@ def __send_to_display(
         if backend != "auto":
             raise ValueError(f"Cannot use backend '{backend}' in notebook")
 
-        if not hasattr(ip_display, "display"):
+        if ip_display is None:
             ip_display = import_module("IPython.display")
         ip_display.display(displayable_image.into_pil())
     else:
@@ -643,8 +655,12 @@ def __to_pil_image(
     is_batched: Optional[bool] = None,
     is_grayscale: Optional[bool] = None,
 ) -> "PIL.Image.Image":
-    if isinstance(image, torch.Tensor):
-        TorchArrayAutoFixer.cls_var_setter(module=torch)
+    torch_module = _get_torch_module()
+
+    if torch_module is not None and isinstance(image, torch_module.Tensor):
+        global torch
+        torch = torch_module
+        TorchArrayAutoFixer.cls_var_setter(module=torch_module)
         _torchvision: ModuleType | None
         try:
             _torchvision = import_module("torchvision")
@@ -652,7 +668,7 @@ def __to_pil_image(
             _torchvision = None
 
         if _torchvision is not None:
-            with torch.no_grad():
+            with torch_module.no_grad():
                 with easy_with_blocks.NoMissingModuleError(strong_warning=True):
                     image = (
                         _torchvision.utils.make_grid(
@@ -667,12 +683,12 @@ def __to_pil_image(
                         .mul(255)
                         .clamp_(0, 255)
                         .permute(1, 2, 0)
-                        .to("cpu", torch.uint8)
+                        .to("cpu", torch_module.uint8)
                         .numpy()
                     )
                     return PIL.Image.fromarray(image)
 
-        with torch.no_grad():
+        with torch_module.no_grad():
             image = __handle_torch_image(
                 image=image,
                 normalise=normalise,
@@ -684,7 +700,7 @@ def __to_pil_image(
                 image = image[0]
             if image.dim() == 3:
                 image = image.permute(1, 2, 0)
-            image = image.mul(255).clamp(0, 255).to(torch.uint8).cpu().numpy()
+            image = image.mul(255).clamp(0, 255).to(torch_module.uint8).cpu().numpy()
             if image.ndim == 3 and image.shape[-1] == 1:
                 image = image[:, :, 0]
             return PIL.Image.fromarray(image)
@@ -733,11 +749,13 @@ def _display_preflight_check(
     image: SupportedImageType,
     normalise: bool | None = None,
 ):
+    torch_module = _get_torch_module()
+    torch_tensor = torch_module.Tensor if torch_module is not None else None
+
     # if we are normalising, we need to convert the image to float32
     if normalise:
-        if utils.module_was_imported("torch"):
-            if isinstance(image, torch.Tensor):
-                image = image.cpu().numpy()
+        if torch_tensor is not None and isinstance(image, torch_tensor):
+            image = image.cpu().numpy()
         if isinstance(image, PIL.Image.Image):
             image = np.array(image)
         if isinstance(image, np.ndarray):
@@ -749,7 +767,7 @@ def _display_preflight_check(
     if utils.module_was_imported("matplotlib") and isinstance(image, plt.Figure):
         # no need to do anything else, but will raise an error if there are more images
         return image
-    if utils.module_was_imported("torch") and isinstance(image, torch.Tensor):
+    if torch_tensor is not None and isinstance(image, torch_tensor):
         return image
     if utils.module_was_imported("numpy") and isinstance(image, np.ndarray):
         return image
