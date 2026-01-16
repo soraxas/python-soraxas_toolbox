@@ -34,7 +34,7 @@ from ._lazy_import_workaround import MatplotlibTorchImportWorkaround
 # pyright: reportAssignmentType=false
 
 
-DisplayBackendT = Literal["auto", "timg", "term_image"]
+DisplayBackendT = Literal["auto", "viu", "timg", "term_image"]
 
 if TYPE_CHECKING:
     import io
@@ -120,6 +120,33 @@ def plt_fig_to_nparray(fig: plt.Figure, normalize: bool = False) -> np.ndarray:
     return img
     # # Add figure in numpy "image" to TensorBoard writer
     # writer.add_image('confusion_matrix', img, step)
+
+
+class ViuViewer:
+    def __init__(self, get_stdout: bool = False):
+        cmd = ["viu", "-"]
+        if all(token in os.environ for token in ("TERMINAL_WIDTH", "TERMINAL_HEIGHT")):
+            cmd.append(f"-w{os.getenv('TERMINAL_WIDTH')}")
+            cmd.append(f"-h{os.getenv('TERMINAL_HEIGHT')}")
+
+        self.program = Popen(
+            cmd,
+            stdin=PIPE,
+            stdout=PIPE if get_stdout else None,
+            bufsize=-1,
+        )
+
+    def __enter__(self):
+        self.program.__enter__()
+        return self
+
+    def __exit__(self, exc_type, value, traceback):
+        self.program.__exit__(exc_type, value, traceback)
+
+    @property
+    def stream(self) -> IO:
+        assert self.program.stdin is not None
+        return self.program.stdin
 
 
 class TerminalImageViewer:
@@ -224,7 +251,14 @@ def __send_to_display(
 
         IPython.display.display(displayable_image.into_pil())
     else:
-        if backend in ("auto", "timg"):
+        if backend in ("auto", "viu"):
+            if which("viu"):
+                with ViuViewer(get_stdout=pbar is not None) as viewer:
+                    displayable_image.into_stream_save_functor()(viewer.stream)
+                    if pbar is not None:
+                        out, err = viewer.program.communicate()
+                        pbar.write(out.decode())
+        elif backend in ("auto", "timg"):
             if which("timg"):
                 with TerminalImageViewer(get_stdout=pbar is not None) as viewer:
                     displayable_image.into_stream_save_functor()(viewer.stream)
@@ -274,7 +308,7 @@ def ensure_is_numpy(img) -> np.ndarray:
 
 def ensure_is_pillow(img) -> PIL.Image.Image:
     if isinstance(img, np.ndarray):
-        return PIL.Image.fromarray(img)
+        return PIL.Image.fromarray(ensure_uint8_image(img))
     elif isinstance(img, PIL.Image.Image):
         return img
     else:
@@ -718,19 +752,19 @@ def display(
         if len(images) > 1 and any(isinstance(x, plt.Figure) for x in images):
             raise NotImplementedError("matplotlib does not support multi image")
 
-    # early return for matplotlib figure
-    if isinstance(images[0], plt.Figure):
-        if len(more_images) > 0:
-            raise NotImplementedError("matplotlib does not support multi image")
+        # early return for matplotlib figure
+        if isinstance(images[0], plt.Figure):
+            if len(more_images) > 0:
+                raise NotImplementedError("matplotlib does not support multi image")
 
-        return __send_to_display(
-            displayable_image=DisplayableImage(
-                stream_save_functor=lambda stream: images[0].savefig(stream),
-                stream_format=format,
-            ),
-            pbar=pbar,
-            backend=backend,
-        )
+            return __send_to_display(
+                displayable_image=DisplayableImage(
+                    stream_save_functor=lambda stream: images[0].savefig(stream),
+                    stream_format=format,
+                ),
+                pbar=pbar,
+                backend=backend,
+            )
 
     #####################################################
     # for list of nparray or tensor

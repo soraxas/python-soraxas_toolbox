@@ -68,7 +68,9 @@ def display(
     ] = None,
     display_backend: Annotated[
         st.image.DisplayBackendT,
-        typer.Option(help="The backend to use for displaying the image."),
+        typer.Option(
+            "-b", "--backend", help="The backend to use for displaying the image."
+        ),
     ] = "auto",
     cv2_ops: Annotated[
         str | None,
