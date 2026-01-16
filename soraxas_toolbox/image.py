@@ -4,8 +4,10 @@ import math
 import os
 import warnings
 from abc import ABC
+from importlib import import_module
 from shutil import which
 from subprocess import PIPE, Popen
+from types import ModuleType
 from typing import (
     IO,
     TYPE_CHECKING,
@@ -66,6 +68,8 @@ else:
     numbers = lazy_import_plus.lazy_module("numbers")
 
     io = lazy_import_plus.lazy_module("io")
+    ip_display: Any = lazy_import_plus.lazy_module("IPython.display")
+    AutoImage: Any | None = None
 
 ############################################################
 ##             Turn any matplotlib plt to img             ##
@@ -89,19 +93,25 @@ def plt_fig_to_nparray(fig: plt.Figure, normalize: bool = False) -> np.ndarray:
     """
 
     # remove white padding
-    fig.tight_layout()
+    try:
+        fig.tight_layout()
+    except Exception:
+        # Some mocked/non-interactive canvases fail during tight_layout.
+        pass
 
     # Draw figure on canvas
     fig.canvas.draw()
 
     is_argb = False
     # Convert the figure to numpy array, read the pixel values and reshape the array
-    if hasattr(fig.canvas, "tostring_rgb"):
-        _img_str = fig.canvas.tostring_rgb()  # type: ignore[attr-defined]
+    tostring_rgb = getattr(fig.canvas, "tostring_rgb", None)
+    tostring_argb = getattr(fig.canvas, "tostring_argb", None)
+    if callable(tostring_rgb):
+        _img_str = tostring_rgb()  # type: ignore[operator]
         n_channel = 3
-    elif hasattr(fig.canvas, "tostring_argb"):
+    elif callable(tostring_argb):
         is_argb = True
-        _img_str = fig.canvas.tostring_argb()  # type: ignore[attr-defined]
+        _img_str = tostring_argb()  # type: ignore[operator]
         n_channel = 4
     else:
         raise NotImplementedError(f"{fig.canvas}")
@@ -228,7 +238,6 @@ class DisplayableImage:
         """
         if self.mode == "stream":
             # create this tmp buffer on SELF to keep the file in memory
-            print(io.BytesIO)
             self.__tmp_file_buffer = io.BytesIO()
             self.into_stream_save_functor()(self.__tmp_file_buffer)
             return PIL.Image.open(self.__tmp_file_buffer)
@@ -243,22 +252,17 @@ def __send_to_display(
     backend: DisplayBackendT,
     pbar: tqdm.tqdm | None = None,
 ):
+    global AutoImage
+    global ip_display
     if notebook.is_notebook():
-        import IPython.display  # type: ignore[import-untyped]
-
         if backend != "auto":
             raise ValueError(f"Cannot use backend '{backend}' in notebook")
 
-        IPython.display.display(displayable_image.into_pil())
+        if not hasattr(ip_display, "display"):
+            ip_display = import_module("IPython.display")
+        ip_display.display(displayable_image.into_pil())
     else:
-        if backend in ("auto", "viu"):
-            if which("viu"):
-                with ViuViewer(get_stdout=pbar is not None) as viewer:
-                    displayable_image.into_stream_save_functor()(viewer.stream)
-                    if pbar is not None:
-                        out, err = viewer.program.communicate()
-                        pbar.write(out.decode())
-        elif backend in ("auto", "timg"):
+        if backend in ("auto", "timg"):
             if which("timg"):
                 with TerminalImageViewer(get_stdout=pbar is not None) as viewer:
                     displayable_image.into_stream_save_functor()(viewer.stream)
@@ -267,10 +271,19 @@ def __send_to_display(
                         pbar.write(out.decode())
             elif backend == "timg":
                 raise ValueError(f"Cannot use backend '{backend}' as binary not found!")
+        elif backend in ("auto", "viu"):
+            if which("viu"):
+                with ViuViewer(get_stdout=pbar is not None) as viewer:
+                    displayable_image.into_stream_save_functor()(viewer.stream)
+                    if pbar is not None:
+                        out, err = viewer.program.communicate()
+                        pbar.write(out.decode())
         elif backend in ("auto", "term_image"):
             pip_ensure_version.require_package("term_image")
-            from term_image.image import AutoImage
+            if AutoImage is None:
+                from term_image.image import AutoImage as _AutoImage
 
+                AutoImage = _AutoImage
             AutoImage(displayable_image.into_pil()).draw()
         else:
             raise NotImplementedError(f"Unknown backend {backend}")
@@ -332,12 +345,12 @@ def resize(
         _original_type = "array"
         image = cast(np.ndarray, image)
         new_shape = get_new_shape_maintain_ratio(target_size, image.shape[:2])
-    elif isinstance(image, PIL.Image):
+    elif isinstance(image, PIL.Image.Image):
         _original_type = "pillow"
         image = cast(PIL.Image.Image, image)
         new_shape = get_new_shape_maintain_ratio(target_size, image.size)
     else:
-        raise ValueError(f"Unsupported type: {_original_type}")
+        raise ValueError(f"Unsupported type: {type(image)}")
 
     if backend == "pillow":
         try:
@@ -487,6 +500,7 @@ class NumpyArrayAutoFixer(ArrayAutoFixer):
     # Width X Height X Color
     color_channel_idx: int = -1
     auto_fix_channel_idx: int = -3
+    module = np
 
 
 class TorchArrayAutoFixer(ArrayAutoFixer):
@@ -629,17 +643,58 @@ def __to_pil_image(
     is_batched: Optional[bool] = None,
     is_grayscale: Optional[bool] = None,
 ) -> "PIL.Image.Image":
-    if utils.module_was_imported("torch") and not utils.module_was_imported(
-        "torchvision"
-    ):
-        # fallback as numpy
-        if isinstance(image, torch.Tensor):
-            image = image.detach().cpu().numpy()
+    if isinstance(image, torch.Tensor):
+        TorchArrayAutoFixer.cls_var_setter(module=torch)
+        _torchvision: ModuleType | None
+        try:
+            _torchvision = import_module("torchvision")
+        except Exception:
+            _torchvision = None
 
-    if utils.module_was_imported("numpy") and isinstance(image, np.ndarray):
+        if _torchvision is not None:
+            with torch.no_grad():
+                with easy_with_blocks.NoMissingModuleError(strong_warning=True):
+                    image = (
+                        _torchvision.utils.make_grid(
+                            __handle_torch_image(
+                                image=image,
+                                normalise=normalise,
+                                is_grayscale=is_grayscale,
+                                target_size=target_size,
+                                is_batched=is_batched,
+                            )
+                        )
+                        .mul(255)
+                        .clamp_(0, 255)
+                        .permute(1, 2, 0)
+                        .to("cpu", torch.uint8)
+                        .numpy()
+                    )
+                    return PIL.Image.fromarray(image)
+
+        with torch.no_grad():
+            image = __handle_torch_image(
+                image=image,
+                normalise=normalise,
+                is_grayscale=is_grayscale,
+                target_size=target_size,
+                is_batched=is_batched,
+            )
+            if image.dim() == 4:
+                image = image[0]
+            if image.dim() == 3:
+                image = image.permute(1, 2, 0)
+            image = image.mul(255).clamp(0, 255).to(torch.uint8).cpu().numpy()
+            if image.ndim == 3 and image.shape[-1] == 1:
+                image = image[:, :, 0]
+            return PIL.Image.fromarray(image)
+
+    if isinstance(image, np.ndarray):
         NumpyArrayAutoFixer.cls_var_setter(module=np)
 
-        image: np.ndarray = NumpyArrayAutoFixer.fix_channel(image)
+        image = NumpyArrayAutoFixer.fix_channel(image)
+        if image.ndim == 4:
+            image = image[0]
 
         if target_size is not None:
             # we are doing resize first as it might reduce work needed for normalise
@@ -657,33 +712,7 @@ def __to_pil_image(
         image = NumpyArrayAutoFixer.fix_dtype(image)
         return PIL.Image.fromarray(ensure_uint8_image(image))
 
-    # image would either be a torch tensor or a PIL image
-    image = cast(Union["torch.Tensor", PIL.Image.Image], image)
-
-    if utils.module_was_imported("torchvision") and isinstance(image, torch.Tensor):
-        TorchArrayAutoFixer.cls_var_setter(module=torch)
-        with torch.no_grad():
-            with easy_with_blocks.NoMissingModuleError(strong_warning=True):
-                # the following should be a list of 3D array
-                image = (
-                    torchvision.utils.make_grid(
-                        __handle_torch_image(
-                            image=image,
-                            normalise=normalise,
-                            is_grayscale=is_grayscale,
-                            target_size=target_size,
-                            is_batched=is_batched,
-                        )
-                    )
-                    .mul(255)
-                    .clamp_(0, 255)
-                    .permute(1, 2, 0)
-                    .to("cpu", torch.uint8)
-                    .numpy()
-                )
-                # .add_(0.5)
-                return PIL.Image.fromarray(image)
-
+    # image would either be a PIL image
     image = cast("PIL.Image.Image", image)
 
     if target_size is not None:
@@ -733,7 +762,7 @@ def display(
     image: SupportedImageType,
     *more_images: SupportedImageType,
     max_cols: int | None = None,
-    target_size: Tuple[int, int] | None = None,
+    target_size: Tuple[int, int] | int | None = None,
     pbar: tqdm.tqdm | None = None,
     format: str = "bmp",
     #
@@ -805,7 +834,8 @@ def view_high_dimensional_embeddings(
     if label is not None:
         assert len(label) == x.shape[0], f"{len(label)} != {x.shape}"
 
-    tsne = TSNE(n_components=2, verbose=1, random_state=123)
+    perplexity = min(30.0, max(1.0, float(x.shape[0] - 1)))
+    tsne = TSNE(n_components=2, verbose=1, random_state=123, perplexity=perplexity)
     z = tsne.fit_transform(x)
 
     df = pd.DataFrame()

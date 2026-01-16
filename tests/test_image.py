@@ -1,7 +1,9 @@
 """Comprehensive unit tests for soraxas_toolbox.image module."""
 
+import importlib.util
+import io
 import warnings
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import numpy as np
 import pytest
@@ -155,7 +157,7 @@ def test_terminal_image_viewer_with_env(mock_terminal_env):
     """Test TerminalImageViewer with terminal environment variables."""
     with patch("soraxas_toolbox.image.which", return_value="/usr/bin/timg"):
         with patch("soraxas_toolbox.image.Popen") as mock_popen:
-            viewer = TerminalImageViewer(get_stdout=False)
+            TerminalImageViewer(get_stdout=False)
             # Check that command includes size
             call_args = mock_popen.call_args
             assert "-g80x24" in call_args[0][0]
@@ -368,6 +370,7 @@ def test_resize_numpy_cv2_backend(sample_numpy_image):
     try:
         import cv2
 
+        assert cv2 is not None
         result = resize(sample_numpy_image, target_size=50, backend="cv2")
         assert isinstance(result, np.ndarray)
     except ImportError:
@@ -456,7 +459,9 @@ def test_make_displayable_image_unsupported_bit_size():
     # Create an image with unsupported mode
     img = Image.new("RGB", (10, 10))
     # Mock mode to return something unsupported
-    with patch.object(img, "mode", "I;64"):
+    with patch.object(
+        Image.Image, "mode", new_callable=PropertyMock, return_value="I;64"
+    ):
         with pytest.raises(ValueError, match="Unsupported file type"):
             make_displayable_image(img)
 
@@ -498,7 +503,7 @@ def test_ensure_uint8_image_uint16():
 
 def test_ensure_uint8_image_float_as_uint16():
     """Test ensure_uint8_image with float and as_uint16=True."""
-    img = np.random.randint(0, 65535, (10, 10), dtype=np.float32)
+    img = np.random.uniform(0, 65535, (10, 10)).astype(np.float32)
     result = ensure_uint8_image(img, as_uint16=True)
     assert result.dtype == np.uint16
 
@@ -599,7 +604,7 @@ def test_array_auto_fixer_fix_float_range_out_of_range():
     x = np.array([-10, 300], dtype=np.float32)
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        result = NumpyArrayAutoFixer.fix_float_range(x, normalise=False)
+        NumpyArrayAutoFixer.fix_float_range(x, normalise=False)
         assert len(w) >= 1
 
 
@@ -851,44 +856,35 @@ def test_display_with_normalise():
 @pytest.mark.slow
 def test_view_high_dimensional_embeddings():
     """Test view_high_dimensional_embeddings function."""
-    try:
-        from sklearn.manifold import TSNE  # type: ignore[import-untyped]
-
-        x = np.random.rand(20, 10)
-        with patch("soraxas_toolbox.image.display") as mock_display:
-            view_high_dimensional_embeddings(x)
-            mock_display.assert_called_once()
-    except ImportError:
+    if importlib.util.find_spec("sklearn") is None:
         pytest.skip("scikit-learn not available")
+    x = np.random.rand(20, 10)
+    with patch("soraxas_toolbox.image.display") as mock_display:
+        view_high_dimensional_embeddings(x)
+        mock_display.assert_called_once()
 
 
 @pytest.mark.slow
 def test_view_high_dimensional_embeddings_with_labels():
     """Test view_high_dimensional_embeddings with labels."""
-    try:
-        from sklearn.manifold import TSNE  # type: ignore[import-untyped]
-
-        x = np.random.rand(20, 10)
-        labels = np.random.randint(0, 3, 20)
-        with patch("soraxas_toolbox.image.display") as mock_display:
-            view_high_dimensional_embeddings(x, label=labels)
-            mock_display.assert_called_once()
-    except ImportError:
+    if importlib.util.find_spec("sklearn") is None:
         pytest.skip("scikit-learn not available")
+    x = np.random.rand(20, 10)
+    labels = np.random.randint(0, 3, 20)
+    with patch("soraxas_toolbox.image.display") as mock_display:
+        view_high_dimensional_embeddings(x, label=labels)
+        mock_display.assert_called_once()
 
 
 @pytest.mark.slow
 def test_view_high_dimensional_embeddings_label_mismatch():
     """Test view_high_dimensional_embeddings with mismatched label length."""
-    try:
-        from sklearn.manifold import TSNE  # type: ignore[import-untyped]
-
-        x = np.random.rand(20, 10)
-        labels = np.random.randint(0, 3, 15)  # Wrong length
-        with pytest.raises(AssertionError):
-            view_high_dimensional_embeddings(x, label=labels)
-    except ImportError:
+    if importlib.util.find_spec("sklearn") is None:
         pytest.skip("scikit-learn not available")
+    x = np.random.rand(20, 10)
+    labels = np.random.randint(0, 3, 15)  # Wrong length
+    with pytest.raises(AssertionError):
+        view_high_dimensional_embeddings(x, label=labels)
 
 
 # ============================================================================
@@ -981,7 +977,7 @@ def test_display_backend_auto_timg():
                 return_value=mock_viewer_instance
             )
             mock_viewer_instance.__exit__ = MagicMock(return_value=None)
-            mock_viewer_instance.stream = MagicMock()
+            mock_viewer_instance.stream = io.BytesIO()
             mock_viewer.return_value = mock_viewer_instance
             display(img, backend="auto")
             mock_viewer.assert_called_once()
@@ -1006,6 +1002,7 @@ def test_display_backend_term_image():
                 mock_img = MagicMock()
                 mock_auto.return_value = mock_img
                 display(img, backend="term_image")
+                mock_pip.require_package.assert_called_once_with("term_image")
                 mock_auto.assert_called_once()
                 mock_img.draw.assert_called_once()
 
@@ -1024,7 +1021,7 @@ def test_display_in_notebook():
     """Test display in notebook environment."""
     img = Image.new("RGB", (10, 10), color="red")
     with patch("soraxas_toolbox.image.notebook.is_notebook", return_value=True):
-        with patch("soraxas_toolbox.image.IPython.display") as mock_ipython:
+        with patch("soraxas_toolbox.image.ip_display") as mock_ipython:
             display(img, backend="auto")
             mock_ipython.display.assert_called_once()
 
@@ -1050,7 +1047,7 @@ def test_display_with_pbar():
                 return_value=mock_viewer_instance
             )
             mock_viewer_instance.__exit__ = MagicMock(return_value=None)
-            mock_viewer_instance.stream = MagicMock()
+            mock_viewer_instance.stream = io.BytesIO()
             mock_program = MagicMock()
             mock_program.communicate.return_value = (b"output", b"")
             mock_viewer_instance.program = mock_program
@@ -1092,7 +1089,7 @@ def test_display_numpy_16bit():
 def test_resize_unsupported_type():
     """Test resize with unsupported type."""
     with pytest.raises(ValueError, match="Unsupported type"):
-        resize("not an image", target_size=50)
+        resize("not an image", target_size=50)  # type: ignore[arg-type]
 
 
 @pytest.mark.requires_pil
