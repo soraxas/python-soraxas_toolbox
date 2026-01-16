@@ -76,8 +76,8 @@ def display(
         str | None,
         typer.Option(
             help=(
-                "Arbitrary cv2 operations to apply to the image."
-                "e.g. `cv2.cvtColor(img, cv2.COLOR_BGR2RGB)`, `cv2.cvtColor(img, cv2.COLOR_BayerBG2RGB)`"
+                "Arbitrary cv2 operations to apply to the image before displaying it."
+                "e.g. `cv2.cvtColor(img, cv2.COLOR_BGR2RGB)`\n`cv2.cvtColor(img, cv2.COLOR_BayerBG2RGB)`"
             )
         ),
     ] = None,
