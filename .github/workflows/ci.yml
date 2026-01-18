@@ -61,9 +61,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
           enable-cache: false
 
-      - name: Create Docker network for running Testcontainers
-        run: docker network create ${{ env.TESTCONTAINER_DOCKER_NETWORK }}
-
       - name: Install dependencies
         # not using --all-extras as graphiti is "part of" this repository, but its extra will pull in deps like torch runtime
         run: uv sync --all-packages #--group testing-extra
